@@ -1,10 +1,13 @@
-Sidechain template
-==================
+Thunder
+=======
 
-A sidechain of the Chains mainchain with nothing in it but what every sidechain
-needs: blind merged mining, deposits from the mainchain and withdrawals to it.
-Copy it to make a sidechain. See [doc/sidechain.md](doc/sidechain.md) for how it
-works, how to try it, and how to make your own.
+Thunder is a sidechain of the Chains mainchain for volume: one-minute blocks
+of up to 32 million weight units, eight times the block size of Bitcoin, so
+that the mainchain can stay small. Its coins are mainchain coins, deposited
+from the mainchain and withdrawn back to it.
+
+It is the [sidechain template](doc/sidechain.md) with its own identity and
+block size.
 
 It is derived from the Chains mainchain, which is derived from Bitcoin Core;
 the rest of this file is from there.
