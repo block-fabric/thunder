@@ -1,18 +1,18 @@
 {
   "chain": "signet",
   "test_chain": true,
-  "genesis": "10c6180a0811767ade723326f0fcdd3794e4007c0f714d4968d4da921d17aa73",
+  "genesis": "7d0a5255058749a8b1ec2938c1d2bec165416de3556c42fd28b950b416dc6778",
   "subsidy_halving_interval": 210000,
   "pow": {
     "limit": "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
   },
   "net": {
-    "default_port": 39655,
-    "magic": "5c1dec03",
+    "default_port": 39755,
+    "magic": "74687503",
     "dns_seeds": [
     ]
   },
   "addresses": {
-    "bech32_hrp": "tsc"
+    "bech32_hrp": "tth"
   }
 }

@@ -233,10 +233,12 @@ public:
             .redownload_buffer_size = 15400,
         };
 
-        // This chain is a sidechain of the Chains mainchain.
-        // TODO for a new sidechain: its slot, its own message, magic bytes, port and address prefix.
-        MakeSidechain({.slot = 0, .genesis_message = "Sidechain template, main network", .genesis_time = 1790900000,
-                       .message_start = {0x5c, 0x1d, 0xec, 0x01}, .default_port = 9655, .bech32_hrp = "sc"});
+        // Thunder is a sidechain of the Chains mainchain, in slot 2.
+        MakeSidechain({.slot = 2, .genesis_message = "Thunder: the mainchain keeps blocks small, Thunder makes them large", .genesis_time = 1790900000,
+                       .message_start = {0x74, 0x68, 0x75, 0x01}, .default_port = 9755, .bech32_hrp = "th"});
+        // Thunder is the chain for volume: its blocks are eight times those of Bitcoin.
+        consensus.max_block_weight = 32'000'000;
+        consensus.max_block_tx_weight = 31'000'000;
         consensus.coinbase_maturity = 0; // what a block pays (deposits, fees) can be spent in the next
     }
 };
@@ -333,11 +335,13 @@ public:
             .redownload_buffer_size = 15400,
         };
 
-        // This chain is a sidechain of the Chains testnet.
-        MakeSidechain({.slot = 0, .genesis_message = "Sidechain template, test network", .genesis_time = 1790900000,
-                       .message_start = {0x5c, 0x1d, 0xec, 0x02}, .default_port = 19655, .bech32_hrp = "tsc"});
+        // Thunder on the Chains testnet, in slot 2.
+        MakeSidechain({.slot = 2, .genesis_message = "Thunder testnet", .genesis_time = 1790900000,
+                       .message_start = {0x74, 0x68, 0x75, 0x02}, .default_port = 19755, .bech32_hrp = "tth"});
         // The mainchain of the test network votes on a withdrawal bundle within 600 blocks.
         consensus.sidechain.bundle_retry_delay = 20;
+        consensus.max_block_weight = 32'000'000;
+        consensus.max_block_tx_weight = 31'000'000;
         consensus.coinbase_maturity = 0; // what a block pays (deposits, fees) can be spent in the next
     }
 };
@@ -443,9 +447,11 @@ public:
             .redownload_buffer_size = 15885,
         };
 
-        // This chain is a sidechain of the Chains signet. Its own blocks are not signed.
-        MakeSidechain({.slot = 0, .genesis_message = "Sidechain template, signet", .genesis_time = 1790900000,
-                       .message_start = {0x5c, 0x1d, 0xec, 0x03}, .default_port = 39655, .bech32_hrp = "tsc"});
+        // Thunder on the Chains signet, in slot 2. Its own blocks are not signed.
+        MakeSidechain({.slot = 2, .genesis_message = "Thunder signet", .genesis_time = 1790900000,
+                       .message_start = {0x74, 0x68, 0x75, 0x03}, .default_port = 39755, .bech32_hrp = "tth"});
+        consensus.max_block_weight = 32'000'000;
+        consensus.max_block_tx_weight = 31'000'000;
         consensus.coinbase_maturity = 0; // what a block pays (deposits, fees) can be spent in the next
     }
 };
@@ -493,11 +499,11 @@ public:
         consensus.nMinimumChainWork = uint256{};
         consensus.defaultAssumeValid = uint256{};
 
-        pchMessageStart[0] = 0x5c;
-        pchMessageStart[1] = 0x1d;
-        pchMessageStart[2] = 0xec;
+        pchMessageStart[0] = 0x74;
+        pchMessageStart[1] = 0x68;
+        pchMessageStart[2] = 0x75;
         pchMessageStart[3] = 0x04;
-        nDefaultPort = 29655;
+        nDefaultPort = 29755;
         nPruneAfterHeight = opts.fastprune ? 100 : 1000;
 
         // On request this chain is a sidechain, with what tests need to be quick.
@@ -508,6 +514,8 @@ public:
             // A sidechain has no sidechains of its own.
             consensus.drivechain.max_sidechains = 0;
             consensus.coinbase_maturity = 0;
+            consensus.max_block_weight = 32'000'000;
+            consensus.max_block_tx_weight = 31'000'000;
         }
         m_assumed_blockchain_size = 0;
         m_assumed_chain_state_size = 0;
@@ -562,7 +570,7 @@ public:
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
 
         // Its own, so that an address of another chain is not taken for one of this chain.
-        bech32_hrp = "rsc";
+        bech32_hrp = "rth";
 
         // Copied from Testnet4.
         m_headers_sync_params = HeadersSyncParams{

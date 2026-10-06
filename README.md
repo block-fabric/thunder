@@ -1,90 +1,149 @@
-Sidechain template
-==================
+# Thunder
 
-A sidechain of the Chains mainchain with nothing in it but what every sidechain
-needs: blind merged mining, deposits from the mainchain and withdrawals to it.
-Copy it to make a sidechain. See [doc/sidechain.md](doc/sidechain.md) for how it
-works, how to try it, and how to make your own.
+Thunder is a sidechain of Chains for volume: blocks of up to 32 million weight units, eight times the
+block size of Bitcoin, so that the mainchain can stay small. Its coins are CHN, deposited from the
+mainchain and withdrawn back to it.
 
-It is derived from the Chains mainchain, which is derived from Bitcoin Core;
-the rest of this file is from there.
+| | |
+|---|---|
+| Slot on the mainchain | 2 |
+| Coin | CHN, deposited from [Chains](https://github.com/block-fabric/chains) and withdrawn back to it |
+| Addresses | `th1…` (`tth1…` on the test networks) |
+| P2P port | 9755 (testnet 19755, signet 39755, regtest 29755) |
+| RPC port | 9754 (testnet 19754, signet 39754, regtest 29754) |
 
-Bitcoin Core integration/staging tree
-=====================================
+Thunder is the [sidechain template](doc/sidechain.md) of Chains with its own identity and a larger block. A Thunder node needs a
+Chains node (`chainsd` or `chains-qt`) to follow, reached over its RPC interface.
 
-https://bitcoincore.org
+## Installing
 
-For an immediately usable, binary version of the Bitcoin Core software, see
-https://bitcoincore.org/en/download/.
+Builds for Linux (x86-64) are at https://blockfab.org/drivechains/. Unpack, check `sha256sum -c SHA256SUMS`, and run what is in `bin/`. The wallet needs the Qt libraries of the system (on Ubuntu 24.04: `sudo apt install libqt6widgets6 libqt6network6 libqt6dbus6 libqrencode4 libsqlite3-0`); the node and the tools need none of them.
 
-What is Bitcoin Core?
----------------------
+## Building from source
 
-Bitcoin Core connects to the Bitcoin peer-to-peer network to download and fully
-validate blocks and transactions. It also includes a wallet and graphical user
-interface, which can be optionally built.
+On Debian or Ubuntu (24.04):
 
-Further information about Bitcoin Core is available in the [doc folder](/doc).
+```sh
+sudo apt install build-essential cmake pkgconf python3 libevent-dev libboost-dev \
+    libsqlite3-dev libzmq3-dev qt6-base-dev qt6-tools-dev qt6-l10n-tools libqrencode-dev
+git clone https://github.com/block-fabric/thunder.git
+cd thunder
+cmake -B build -DBUILD_GUI=ON
+cmake --build build -j$(nproc)
+```
 
-License
--------
+Leave out `-DBUILD_GUI=ON` (and the Qt packages) for a node without a window. Other systems and
+options: [doc/build-unix.md](doc/build-unix.md) and the other `doc/build-*.md`.
 
-Bitcoin Core is released under the terms of the MIT license. See [COPYING](COPYING) for more
-information or see https://opensource.org/license/MIT.
+The programs, in `build/bin`:
 
-Development Process
--------------------
+| Program | What it is |
+|---|---|
+| `thunder-qt` | the wallet, with its window |
+| `thunderd` | the node, without a window |
+| `thunder-cli` | commands for a running node or wallet |
+| `thunder-wallet`, `thunder-tx`, `thunder-util` | tools that work without a node |
 
-The `master` branch is regularly built (see `doc/build-*.md` for instructions) and tested, but it is not guaranteed to be
-completely stable. [Tags](https://github.com/bitcoin/bitcoin/tags) are created
-regularly from release branches to indicate new official, stable release versions of Bitcoin Core.
+Tests: `ctest --test-dir build` (unit tests) and `build/test/functional/test_runner.py`. The
+sidechain tests need a built Chains tree next to this one (`../chains`), or `MAINCHAIN_BIN_DIR`
+set to the folder of its programs.
 
-The https://github.com/bitcoin-core/gui repository is used exclusively for the
-development of the GUI. Its master branch is identical in all monotree
-repositories. Release branches and tags do not exist, so please do not fork
-that repository unless it is for development reasons.
+## Running it
 
-The contribution workflow is described in [CONTRIBUTING.md](CONTRIBUTING.md)
-and useful hints for developers can be found in [doc/developer-notes.md](doc/developer-notes.md).
+First a Chains node, with RPC on (`server=1` in `chains.conf`, or `-server`), on the same network.
 
-Testing
--------
+The simplest is to let the Chains wallet run Thunder: in its **Sidechain Nodes** window, select
+Thunder, press **Locate programs…** and choose the folder with `thunderd` and `thunder-qt`, then **Start node**
+or **Open wallet**.
 
-Testing and code review is the bottleneck for development; we get more pull
-requests than we can review and test on short notice. Please be patient and help out by testing
-other people's pull requests, and remember this is a security-critical project where any mistake might cost people
-lots of money.
+By hand, on the same computer as the Chains node:
 
-### Automated Testing
+```sh
+thunder-qt                 # the main network
+thunder-qt -testnet        # the test network
+```
 
-Developers are strongly encouraged to write [unit tests](src/test/README.md) for new code, and to
-submit new unit tests for old code. Unit tests can be compiled and run
-(assuming they weren't disabled during the generation of the build system) with: `ctest`. Further details on running
-and extending unit tests can be found in [/src/test/README.md](/src/test/README.md).
+It finds the Chains node by itself: RPC on 127.0.0.1 at the port of the network, and the cookie
+file in the Chains data folder (`~/.chains/.cookie`, `~/.chains/testnet/.cookie`). Options for
+anything else:
 
-There are also [regression and integration tests](/test), written
-in Python.
-These tests can be run (if the [test dependencies](/test) are installed) with: `build/test/functional/test_runner.py`
-(assuming `build` is your build directory).
+| Option | What it is |
+|---|---|
+| `-mainchainrpcconnect=<ip>` | address of the Chains node (default 127.0.0.1) |
+| `-mainchainrpcport=<port>` | its RPC port (default 9554, testnet 19554, signet 39554, regtest 29554) |
+| `-mainchainrpccookiefile=<file>` | its cookie file |
+| `-mainchaindatadir=<dir>` | its data folder, where the cookie file is looked for (default `~/.chains`) |
+| `-mainchainrpcuser=<user>`, `-mainchainrpcpassword=<pw>` | credentials, instead of the cookie |
+| `-mainchainrpcwallet=<name>` | the Chains wallet that pays for merged mining (default: its only loaded wallet) |
 
-The CI (Continuous Integration) systems make sure that every pull request is tested on Windows, Linux, and macOS.
-The CI must pass on all commits before merge to avoid unrelated CI failures on new pull requests.
+The slot is fixed on the main and test networks; `-sidechainslot=<n>` is for regtest only, where
+it makes the chain a sidechain in slot `n` (see [doc/sidechain.md](doc/sidechain.md)).
 
-### Manual Quality Assurance (QA) Testing
+Data and the configuration file `thunder.conf` are in `~/.thunder`; the test network has a subfolder
+`testnet`. The networks have no DNS seeds: give the node a peer with `addnode`. A sample
+`~/.thunder/thunder.conf`:
 
-Changes should be tested by somebody other than the developer who wrote the
-code. This is especially important for large or high-risk changes. It is useful
-to add a test plan to the pull request description if testing the changes is
-not straightforward.
+```ini
+server=1
+fallbackfee=0.0002
 
-Translations
-------------
+# For the test network instead, uncomment:
+# testnet=1
 
-Changes to translations as well as new translations can be submitted to
-[Bitcoin Core's Transifex page](https://explore.transifex.com/bitcoin/bitcoin/).
+[main]
+addnode=<peer>:9755
+mainchainrpcwallet=<wallet of the Chains node>
 
-Translations are periodically pulled from Transifex and merged into the git repository. See the
-[translation process](doc/translation_process.md) for details on how this works.
+[test]
+addnode=<peer>:19755
+mainchainrpcwallet=<wallet of the Chains node>
+```
 
-**Important**: We do not accept translation changes as GitHub pull requests because the next
-pull from Transifex would automatically overwrite them again.
+On the test network, the `-mainchainrpcport`, `-mainchainrpccookiefile` and `-mainchainrpcwallet`
+options are read only from the `[test]` section.
+
+## Coins in and out
+
+- **Deposit.** In Thunder, get a deposit address (`getdepositaddress`, or the **Mainchain** page):
+  `s2_<address>_<checksum>`. In Chains, send to it from the **Sidechains** page, or
+  `chains-cli createsidechaindeposit 2 <deposit address> <amount>`. The coins appear with the
+  next Thunder block.
+- **Withdraw.** `createwithdrawal <Chains address> <amount> ( <fee for Chains miners> )`, or the
+  **Mainchain** page. Withdrawals are paid in bundles that Chains miners vote on (about three
+  months on the main network, 600 blocks on the test network). A withdrawal not in the bundle
+  being voted on can be taken back: `refundwithdrawal <txid> <vout>`.
+- **Merged mining.** Thunder blocks are mined by Chains miners, for a fee in CHN paid by the Chains
+  wallet. `setbmm true <Thunder address>` has the node ask for a block whenever the fees waiting pay
+  for one; it offers the miners 99% and keeps 1% at the address. `requestbmmblock <address>
+  <amount>` asks for one block now, for a fee of your choice (for a deposit on a quiet chain).
+  `getbmminfo` shows how it goes.
+
+How deposits, withdrawals, bundles and merged mining work: [doc/sidechain.md](doc/sidechain.md).
+
+## What it is for
+
+Payments: Thunder is the template with large blocks and nothing else, so it is the place for
+many transactions at low fees. Everything a Bitcoin Core wallet does, it does.
+
+## Commands
+
+The commands of Bitcoin Core, and those of every sidechain:
+
+Sidechain, on the node: `getmainchaininfo`, `syncmainchain`, `setbmm`, `getbmminfo`, `requestbmmblock`, `createbmmblock`, `listwithdrawals`, `getwithdrawalbundle`.
+
+Sidechain, in the wallet: `getdepositaddress`, `createwithdrawal`, `refundwithdrawal`.
+
+## Wallet
+
+The pages: Overview, Send, Receive, Transactions, **Mainchain** (deposits, withdrawals, merged
+mining).
+
+## Credits
+
+Thunder takes its name and purpose, a sidechain with large blocks, from LayerTwo Labs' Thunder. It is built on the sidechain template of Chains, which is based on
+[Bitcoin Core](https://github.com/bitcoin/bitcoin) v32; its README is in
+[doc/README-bitcoin-core.md](doc/README-bitcoin-core.md).
+
+## License
+
+MIT: see [COPYING](COPYING).
