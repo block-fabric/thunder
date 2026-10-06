@@ -140,7 +140,7 @@ mining).
 
 ## Credits
 
-Thunder takes its name and purpose, a sidechain with large blocks, from LayerTwo Labs' Thunder. It is built on the sidechain template of Chains, which is based on
+Thunder is inspired by **Thunder by LayerTwo Labs**, a sidechain with large blocks. It is built on the sidechain template of Chains, which is based on
 [Bitcoin Core](https://github.com/bitcoin/bitcoin) v32; its README is in
 [doc/README-bitcoin-core.md](doc/README-bitcoin-core.md).
 
