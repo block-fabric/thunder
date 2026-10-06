@@ -239,7 +239,7 @@ public:
         // Thunder is the chain for volume: its blocks are eight times those of Bitcoin.
         consensus.max_block_weight = 32'000'000;
         consensus.max_block_tx_weight = 31'000'000;
-        consensus.coinbase_maturity = 6; // deposits and fees can be spent after six blocks
+        consensus.coinbase_maturity = 0; // what a block pays (deposits, fees) can be spent in the next
     }
 };
 
@@ -338,9 +338,11 @@ public:
         // Thunder on the Chains testnet, in slot 2.
         MakeSidechain({.slot = 2, .genesis_message = "Thunder testnet", .genesis_time = 1790900000,
                        .message_start = {0x74, 0x68, 0x75, 0x02}, .default_port = 19755, .bech32_hrp = "tth"});
+        // The mainchain of the test network votes on a withdrawal bundle within 600 blocks.
+        consensus.sidechain.bundle_retry_delay = 20;
         consensus.max_block_weight = 32'000'000;
         consensus.max_block_tx_weight = 31'000'000;
-        consensus.coinbase_maturity = 6;
+        consensus.coinbase_maturity = 0; // what a block pays (deposits, fees) can be spent in the next
     }
 };
 
@@ -450,7 +452,7 @@ public:
                        .message_start = {0x74, 0x68, 0x75, 0x03}, .default_port = 39755, .bech32_hrp = "tth"});
         consensus.max_block_weight = 32'000'000;
         consensus.max_block_tx_weight = 31'000'000;
-        consensus.coinbase_maturity = 6;
+        consensus.coinbase_maturity = 0; // what a block pays (deposits, fees) can be spent in the next
     }
 };
 
@@ -511,7 +513,7 @@ public:
             consensus.sidechain.bundle_retry_delay = 5;
             // A sidechain has no sidechains of its own.
             consensus.drivechain.max_sidechains = 0;
-            consensus.coinbase_maturity = 2;
+            consensus.coinbase_maturity = 0;
             consensus.max_block_weight = 32'000'000;
             consensus.max_block_tx_weight = 31'000'000;
         }
@@ -567,7 +569,8 @@ public:
         base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
 
-        bech32_hrp = "rchn";
+        // Its own, so that an address of another chain is not taken for one of this chain.
+        bech32_hrp = "rth";
 
         // Copied from Testnet4.
         m_headers_sync_params = HeadersSyncParams{

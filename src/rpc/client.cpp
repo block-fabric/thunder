@@ -59,6 +59,10 @@ public:
  */
 static const CRPCConvertParam vRPCConvertParams[] =
 {
+    { "setbmm", 0, "mine" },
+    { "setbmm", 2, "always" },
+    { "setbmm", 3, "amount" },
+    { "requestbmmblock", 1, "amount" },
     { "createwithdrawal", 1, "amount" },
     { "createwithdrawal", 2, "mainchainfee" },
     { "refundwithdrawal", 1, "vout" },
@@ -66,8 +70,6 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "mockscheduler", 0, "delta_time" },
     { "utxoupdatepsbt", 0, "psbt", ParamFormat::STRING },
     { "utxoupdatepsbt", 1, "descriptors" },
-    { "setbmm", 0, "mine" },
-    { "setbmm", 2, "amount" },
     { "setgenerate", 0, "generate" },
     { "setgenerate", 2, "threads" },
     { "generatetoaddress", 0, "nblocks" },

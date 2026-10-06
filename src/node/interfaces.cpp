@@ -665,6 +665,12 @@ public:
         }
         return escrow;
     }
+    std::optional<uint32_t> getSidechainSlot() override
+    {
+        const Consensus::SidechainParams& params{chainman().GetConsensus().sidechain};
+        if (!params.enabled) return std::nullopt;
+        return params.slot;
+    }
     util::Result<CScript> getMainchainScript(const std::string& address) override
     {
         if (!m_node.follower) return util::Error{Untranslated("This chain is not a sidechain")};

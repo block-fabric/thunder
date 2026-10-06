@@ -206,6 +206,9 @@ public:
     //! node cannot be asked, or if it does not know the address.
     virtual util::Result<CScript> getMainchainScript(const std::string& address) = 0;
 
+    //! The slot this chain has on its mainchain, if it is a sidechain.
+    virtual std::optional<uint32_t> getSidechainSlot() = 0;
+
     //! Check if transaction has descendants in mempool.
     virtual bool hasDescendantsInMempool(const Txid& txid) = 0;
 

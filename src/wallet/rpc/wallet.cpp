@@ -1110,6 +1110,7 @@ RPCMethod encryptwallet();
 
 // spend
 RPCMethod sendtoaddress();
+RPCMethod getdepositaddress();
 RPCMethod createwithdrawal();
 RPCMethod refundwithdrawal();
 RPCMethod sendmany();
@@ -1184,6 +1185,7 @@ std::span<const CRPCCommand> GetWalletRPCCommands()
         {"wallet", &send},
         {"wallet", &sendmany},
         {"wallet", &sendtoaddress},
+        {"wallet", &getdepositaddress},
         {"wallet", &createwithdrawal},
         {"wallet", &refundwithdrawal},
         {"wallet", &setlabel},
