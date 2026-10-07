@@ -239,6 +239,8 @@ public:
         // Thunder is the chain for volume: its blocks are eight times those of Bitcoin.
         consensus.max_block_weight = 32'000'000;
         consensus.max_block_tx_weight = 31'000'000;
+        // Signature operations scale with the blocks: eight times Bitcoin's.
+        consensus.max_block_sigops_cost = 640'000;
         consensus.coinbase_maturity = 0; // what a block pays (deposits, fees) can be spent in the next
     }
 };
@@ -342,6 +344,12 @@ public:
         consensus.sidechain.bundle_retry_delay = 20;
         consensus.max_block_weight = 32'000'000;
         consensus.max_block_tx_weight = 31'000'000;
+        // Signature operations scale with the blocks: eight times Bitcoin's.
+        consensus.max_block_sigops_cost = 640'000;
+        // The test network ran with Bitcoin's until then.
+        consensus.sigops_height = 1'000'000;
+        // The test network ran without it until then; see SidechainParams.
+        consensus.sidechain.single_bundle_height = 1'000'000;
         consensus.coinbase_maturity = 0; // what a block pays (deposits, fees) can be spent in the next
     }
 };
@@ -452,6 +460,8 @@ public:
                        .message_start = {0x74, 0x68, 0x75, 0x03}, .default_port = 39755, .bech32_hrp = "tth"});
         consensus.max_block_weight = 32'000'000;
         consensus.max_block_tx_weight = 31'000'000;
+        // Signature operations scale with the blocks: eight times Bitcoin's.
+        consensus.max_block_sigops_cost = 640'000;
         consensus.coinbase_maturity = 0; // what a block pays (deposits, fees) can be spent in the next
     }
 };
@@ -516,6 +526,8 @@ public:
             consensus.coinbase_maturity = 0;
             consensus.max_block_weight = 32'000'000;
             consensus.max_block_tx_weight = 31'000'000;
+            // Signature operations scale with the blocks: eight times Bitcoin's.
+            consensus.max_block_sigops_cost = 640'000;
         }
         m_assumed_blockchain_size = 0;
         m_assumed_chain_state_size = 0;
