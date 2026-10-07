@@ -97,3 +97,20 @@ database taken beforehand, which the in-place rollback must give back exactly.
 
 The mainchain targets `drivechain_messages` and `drivechain_scdb` are here too
 (`src/test/fuzz/drivechain.cpp`).
+
+## Thunder
+
+Thunder's rule is size: blocks of 32 million weight units (31 million for
+transactions, against Chains' 4 million), and 640,000 sigops from
+`sigops_height`.
+
+`feature_thunder_blocks.py`:
+
+- fills a block with more than the mainchain would take;
+- mines it and relays it;
+- checks that Thunder's own limit holds.
+
+The large-block paths are covered here as well:
+
+- the transaction index keeps offsets beyond 16.7 MB;
+- blocks with more than 65,536 transactions are not sent as compact blocks.
