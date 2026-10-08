@@ -241,6 +241,9 @@ public:
         consensus.max_block_tx_weight = 31'000'000;
         // Signature operations scale with the blocks: eight times Bitcoin's.
         consensus.max_block_sigops_cost = 640'000;
+        // Set when the slot activates on the mainchain: the height of the block that activated it.
+        consensus.sidechain.main_activation_height = 0;
+        consensus.sidechain.audit2_height = 0;
         consensus.coinbase_maturity = 0; // what a block pays (deposits, fees) can be spent in the next
     }
 };
@@ -350,6 +353,9 @@ public:
         consensus.sigops_height = 4200;
         // The test network ran without it until then; see SidechainParams.
         consensus.sidechain.single_bundle_height = 4200;
+        // The height of the mainchain block that activated the slot; nothing is left out at 0.
+        consensus.sidechain.main_activation_height = 67;
+        consensus.sidechain.audit2_height = 999999999; // AUDIT2_TESTNET: set at deploy
         consensus.coinbase_maturity = 0; // what a block pays (deposits, fees) can be spent in the next
     }
 };
@@ -462,6 +468,8 @@ public:
         consensus.max_block_tx_weight = 31'000'000;
         // Signature operations scale with the blocks: eight times Bitcoin's.
         consensus.max_block_sigops_cost = 640'000;
+        consensus.sidechain.main_activation_height = 0;
+        consensus.sidechain.audit2_height = 0;
         consensus.coinbase_maturity = 0; // what a block pays (deposits, fees) can be spent in the next
     }
 };
@@ -521,6 +529,7 @@ public:
             consensus.sidechain.enabled = true;
             consensus.sidechain.slot = *opts.sidechain_slot;
             consensus.sidechain.bundle_retry_delay = 5;
+            consensus.sidechain.audit2_height = 0;
             // A sidechain has no sidechains of its own.
             consensus.drivechain.max_sidechains = 0;
             consensus.coinbase_maturity = 0;
