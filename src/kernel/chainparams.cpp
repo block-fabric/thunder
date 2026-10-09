@@ -344,7 +344,7 @@ public:
         };
 
         // Thunder on the Chains testnet, in slot 2.
-        MakeSidechain({.slot = 2, .genesis_message = "Thunder testnet", .genesis_time = 1790900000,
+        MakeSidechain({.slot = 2, .genesis_message = "Thunder testnet", .genesis_time = 1791513177,
                        .message_start = {0x74, 0x68, 0x75, 0x02}, .default_port = 19755, .bech32_hrp = "tth"});
         // The mainchain of the test network votes on a withdrawal bundle within 600 blocks.
         consensus.sidechain.bundle_retry_delay = 20;
@@ -353,7 +353,7 @@ public:
         // Signature operations scale with the blocks: eight times Bitcoin's.
         consensus.max_block_sigops_cost = 640'000;
         // The height of the mainchain block that activated the slot; nothing is left out at 0.
-        consensus.sidechain.main_activation_height = 67;
+        consensus.sidechain.main_activation_height = 0; // set after the slot activates on the restarted test network
         // A tenth of the testnet mainchain's withdrawal_min_score (300); proposals within an hour.
         consensus.sidechain.pending_min_score = 30;
         consensus.sidechain.unproposed_expiry_blocks = 60;
