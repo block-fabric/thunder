@@ -352,7 +352,7 @@ public:
         // Signature operations scale with the blocks: eight times Bitcoin's.
         consensus.max_block_sigops_cost = 640'000;
         // The height of the mainchain block that activated the slot; nothing is left out at 0.
-        consensus.sidechain.main_activation_height = 0;
+        consensus.sidechain.main_activation_height = 670; // the block that activated the slot on the restarted test network
         // A tenth of the testnet mainchain's withdrawal_min_score (300); proposals within an hour.
         consensus.sidechain.pending_min_score = 30;
         consensus.sidechain.unproposed_expiry_blocks = 60;
