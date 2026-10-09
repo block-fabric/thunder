@@ -352,13 +352,8 @@ public:
         consensus.max_block_tx_weight = 31'000'000;
         // Signature operations scale with the blocks: eight times Bitcoin's.
         consensus.max_block_sigops_cost = 640'000;
-        // The test network ran with Bitcoin's until then.
-        consensus.sigops_height = 4200;
-        // The test network ran without it until then; see SidechainParams.
-        consensus.sidechain.single_bundle_height = 4200;
         // The height of the mainchain block that activated the slot; nothing is left out at 0.
         consensus.sidechain.main_activation_height = 67;
-        consensus.sidechain.audit2_height = 3688; // audits 2-4 on the test network, a few blocks after the deploy
         // A tenth of the testnet mainchain's withdrawal_min_score (300); proposals within an hour.
         consensus.sidechain.pending_min_score = 30;
         consensus.sidechain.unproposed_expiry_blocks = 60;

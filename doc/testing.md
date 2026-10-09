@@ -101,8 +101,7 @@ The mainchain targets `drivechain_messages` and `drivechain_scdb` are here too
 ## Thunder
 
 Thunder's rule is size: blocks of 32 million weight units (31 million for
-transactions, against Chains' 4 million), and 640,000 sigops from
-`sigops_height`.
+transactions, against Chains' 4 million), and 640,000 sigops.
 
 `feature_thunder_blocks.py`:
 
