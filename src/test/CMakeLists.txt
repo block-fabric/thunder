@@ -46,6 +46,7 @@ add_executable(test_bitcoin
   descriptor_tests.cpp
   drivechain_tests.cpp
   sidechain_store_tests.cpp
+  thunder_tests.cpp
   disconnected_transactions.cpp
   fees_util_tests.cpp
   feefrac_tests.cpp
