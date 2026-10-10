@@ -104,13 +104,32 @@ The mainchain targets `drivechain_messages` and `drivechain_scdb` are here too
 Thunder's rule is size: blocks of 32 million weight units (31 million for
 transactions, against Chains' 4 million), and 640,000 sigops.
 
-`feature_thunder_blocks.py`:
+`src/test/thunder_tests.cpp` checks each limit at its value, a block exactly at
+the limit being valid and one unit over refused with the limit's reason:
 
-- fills a block with more than the mainchain would take;
-- mines it and relays it;
-- checks that Thunder's own limit holds.
+- `bad-blk-length` (8,000,000 bytes without witness), `bad-blk-tx-weight`
+  (31,000,000 weight units, with a small coinbase too), `bad-blk-weight` (only
+  reachable with witness data), and `bad-blk-sigops`, both where `CheckBlock`
+  counts legacy sigops and where `ConnectBlock` adds P2SH and witness ones;
+- the miner: 39 transactions of 16,000 sigops, and transactions under 31,000,000
+  weight units;
+- the chain parameters of each network, `GetNetworkForMagic`, merkle proofs of
+  blocks of more transactions than Bitcoin's could hold, and that the RPC server
+  takes a request that submits the largest block.
 
-The large-block paths are covered here as well:
+`feature_thunder_blocks.py` runs them on a chain, against a mainchain node:
 
-- the transaction index keeps offsets beyond 16.7 MB;
-- blocks with more than 65,536 transactions are not sent as compact blocks.
+- `getblocktemplate` gives Thunder's limits; the mempool keeps Bitcoin's
+  transaction limits;
+- a block heavier than the mainchain's, and one larger than a P2P message of
+  Bitcoin (mostly witness data), are mined and relayed; transactions of them
+  are proved (`gettxoutproof`, `verifytxoutproof`, `importprunedfunds`);
+- a reorganisation of the mainchain takes the large block back and gives it back;
+- the miner stops below 640,000 sigops;
+- `submitblock` refuses a block over each limit with its reason;
+- a block of more than 65,536 transactions is relayed as a whole block, not a
+  compact block;
+- a block of more than 16,777,215 bytes is submitted through RPC and relayed,
+  and the transaction index finds a transaction past the offsets its entries
+  hold;
+- `-reindex` and `-reindex-chainstate` read the large blocks back.
