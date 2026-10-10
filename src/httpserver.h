@@ -79,7 +79,9 @@ inline constexpr size_t MAX_HEADERS_SIZE{8192};
 
 //! Maximum size of an HTTP request body received from a client.
 //! Also used to limit data queued for sending back to client.
-inline constexpr uint64_t MAX_BODY_SIZE{32_MiB};
+//! Room for a request that submits a block of Thunder (submitblock, a getblocktemplate proposal):
+//! up to 32,000,000 bytes, 64,000,000 as hex. Bitcoin's 32 MiB refused blocks over 16.7 MB.
+inline constexpr uint64_t MAX_BODY_SIZE{64_MiB};
 
 //! Thrown when a request body exceeds MAX_BODY_SIZE (or *will* exceed, in chunked transfer)
 //! so the server can reply with more specific code 413 (content too large) vs general 400 (bad request)

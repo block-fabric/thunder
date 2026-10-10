@@ -25,7 +25,7 @@ import urllib.parse
 RPCSERVERTIMEOUT = 2
 # Set in httpserver.h
 MAX_HEADERS_SIZE = 8192
-MAX_BODY_SIZE = 32 * 1024 * 1024
+MAX_BODY_SIZE = 64 * 1024 * 1024
 
 class BitcoinHTTPConnection:
     def __init__(self, node):
@@ -377,14 +377,12 @@ class HTTPBasicsTest (BitcoinTestFramework):
         conn = BitcoinHTTPConnection(self.node)
         headers_chunked = conn.headers.copy()
         headers_chunked.update({"Transfer-encoding": "chunked"})
-        body_chunked = [
-            b'{"method": "submitblock", "params": ["',
-            b'0' * 10000000,
-            b'1' * 10000000,
-            b'2' * 10000000,
-            b'3' * 10000000,
-            b'"]}'
-        ]
+        # Chunks of 10,000,000 bytes, more of them than MAX_BODY_SIZE holds.
+        body_chunked = (
+            [b'{"method": "submitblock", "params": ["']
+            + [str(i).encode() * 10000000 for i in range(MAX_BODY_SIZE // 10000000 + 1)]
+            + [b'"]}']
+        )
 
         # Split off the send into a background thread. When the server detects
         # the excessive size it will stop reading from the socket, but the client

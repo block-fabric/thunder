@@ -713,10 +713,10 @@ BOOST_AUTO_TEST_CASE(http_request_state_tests)
         BOOST_CHECK(!HTTPRemoteClient::TryReadRequest(client));
         BOOST_CHECK_EQUAL(client->GetRequest()->GetState(), HTTPRequest::State::NeedsBody);
 
-        // The next chunk will be of size 32MiB - 16 + 1, below the limit
+        // The next chunk will be of size MAX_BODY_SIZE - 16 + 1, below the limit
         // on its own but not if it were added to the total cumulative body so far.
         // We don't need to actually send or prepare this amount of data.
-        client->receive("1fffff1\n");
+        client->receive(strprintf("%x\n", MAX_BODY_SIZE - 16 + 1));
         BOOST_CHECK(!HTTPRemoteClient::TryReadRequest(client));
         BOOST_CHECK_EQUAL(client->GetRequest()->GetState(), HTTPRequest::State::Error);
     }
