@@ -12,8 +12,13 @@ integrated title bar: [webui-layouts.md](webui-layouts.md).
 This document says how to build and run it, and how it is made, so that the
 sidechains can take it over for their own apps.
 
-> **In this tree (the sidechain template).** The kit is the one of `chains-app`, made configurable: the
-> program is `<stem>-app` (here `sidechain-app`, and `test_sidechain-app`), and what the app shows of its
+> **In this tree (Thunder).** `thunder-app` is the app of the sidechain template with the pages of
+> Thunder, the chain of large blocks: Batch pay, Payments, Throughput. They are described in
+> [The pages of Thunder](#the-pages-of-thunder); the inventory of the Qt GUI of Thunder, and where each of
+> its functions is now, is section TH of [webui-parity.md](webui-parity.md).
+>
+> **From the sidechain template.** The kit is the one of `chains-app`, made configurable: the
+> program is `<stem>-app` (here `thunder-app`, and `test_thunder-app`), and what the app shows of its
 > chain is in one file, `src/webui/app/src/chain/chain.json`. The app of a sidechain has pages of its own
 > (Peg, Merged mining, its home, the Mainchain tab of Settings) in place of those of the mainchain
 > (Sidechains, Sidechain nodes, Solo mine). How, and how a sidechain adds its own pages so that the
@@ -314,6 +319,7 @@ Rules the code keeps:
 | `brand` | Its mark (`mark`: SVG paths on a 32 grid, drawn by components/Brand.svelte), the colour of the mark (`color`, the CSS variable `--brand`), the hue the icon of the app is turned by (`iconHue`, before the tint of a test network: icontint.cpp) |
 | `networks` | Per network (main, test, signet, regtest): the default ports (`p2p`, `rpc`) and the address prefixes (`hrp`, `pubkey`, `script`) the interface checks addresses with. `test_<bin>-app` (chainconfig_tests.cpp) checks them against the chain parameters |
 | `mainchain` | A sidechain: the name, ticker and URI scheme of its mainchain, and its networks (the RPC port, the default of the Mainchain settings; the address prefixes, for the withdrawals: `checkAddress(..., 'mainchain')`) |
+| `blockWeight` | The weight a block of the chain may have (`consensus.max_block_weight`): how full its blocks are drawn (the block ribbon of the explorer, lib/blocks.ts `BLOCK_WEIGHT`). Chains' 800 000 when it is not set; Thunder sets 32 000 000 |
 | `links` | Help links (`guide`, `website`, `source`, `issues`): items of the menu "This node" and the palette, opened in the browser of the desktop |
 | `drop` | Pages of the kit the chain does not have. A sidechain drops `sidechains`, `sidechain-nodes` and `mine` (no sidechains of its own, no proposals or votes, no solo mining): they leave the sidebars, the workspace, the menus, the palette and the quick actions (`chainHas`, `pageAvailable` in lib/commands.svelte.ts); the host does not register the sidechain nodes, and the RPC policy of a sidechain has none of their methods |
 
@@ -369,7 +375,7 @@ files only through the native chooser; amounts with `Amount`; tables in the colo
 
 ### Pages of a chain of its own
 
-A sidechain made from the template (BitNames, BitAssets, Thunder...) adds its pages in three files the
+A sidechain made from the template (BitNames, BitAssets, Thunder...) adds its pages in five files the
 template keeps empty, and nowhere else, so that a merge of the template never conflicts with them:
 
 1. **src/webui/app/src/chain/local.ts**: an entry per page in `LOCAL_PAGES` (`id`, `title`, `icon`,
@@ -382,6 +388,10 @@ template keeps empty, and nowhere else, so that a merge of the template never co
 3. **src/webui/local.cpp**: the RPC methods the pages call (`RpcMethods`, added to the page's
    allowlist; those that need the keys in `KeyedRpcMethods`) and the host methods they need
    (`RegisterHost`, after the kit's).
+4. **src/webui/app/src/chain/icons.ts**: icons of its own (`LOCAL_ICONS`, SVG paths on the 24 grid of
+   the kit's), named in `local.ts` like the kit's.
+5. **src/webui/app/src/chain/LocalCards.svelte**: cards of its own on the home of the dashboard, after
+   the row of summary cards (views/home/Card.svelte).
 
 ```ts
 // chain/local.ts
@@ -394,6 +404,30 @@ Its own words follow the rules of the kit (`t()` for the app's words; `SafeText`
 the chain); its tests go in `src/chain/` too (`*.test.ts` are found anywhere under src). Nothing in
 `lib/`, `components/`, `pages/` or `views/` needs to change; when a page needs something the kit does
 not offer, make it a change of the template (generic, behind `chain.json`), and merge it.
+
+### The pages of Thunder
+
+In `src/webui/app/src/chain`: `local.ts` lists them (Batch pay and Payments in the Wallet section after
+the kit's, Throughput in the Chain section after Peg and Merged mining, before the explorer and the
+tools), `LocalPages.svelte` shows them, `LocalCards.svelte` puts their cards on the home of the
+dashboard, `icons.ts` draws their icons; `pages/` holds the pages, `th/` what they share (`model.ts`:
+the reading, checking and totalling of a list, the payments, the throughput; `store.svelte.ts`: the
+statistics of the blocks, the mempool, and the list of a batch being made; `Bars.svelte`: the charts;
+`th.css`: their look). `src/webui/local.cpp` adds two methods to the page's allowlist, both read only:
+`estimatesmartfee` and `getchaintxstats`.
+
+| Page | What it does |
+|---|---|
+| Batch pay | Many recipients at once. A row typed in its form, a list pasted (one recipient a line: the address, the amount, a label, separated by commas, semicolons, tabs or spaces; a first line naming the columns, in any order, read for their order), or a CSV file chosen in the file chooser of the desktop (at most 5 MB, 50 000 recipients); amounts read in the unit chosen. Every row checked as it comes in: an address of this chain and network (a bech32 address in capitals is the same one), an amount above dust (GetDustThreshold at the dust relay fee), each address once (the wallet pays each once in a transaction: "Merge duplicates" sums them). The rows with a problem are shown first and removed in a click; a row is edited in place. The summary: the total, the recipients ready, the transactions the list takes (1 500 recipients each, well under a standard transaction), its size and its share of a block, the fee at the rate chosen (recommended for a target, or custom), the balance after, the fee subtracted from the amounts if asked. Choose coins (the coin list of Send) for a list of one transaction. The confirmation names every recipient (the first 300, the rest counted), the fee of the first transaction and the total, with the delay of Send; then the transactions are made, signed and sent one after the other through the wallet functions of the kit (`wallet.send.prepare`, `wallet.send.commit`), the passphrase of a locked wallet asked once and kept only while they are made. What was paid leaves the list, what was not stays, to send again. A wallet that cannot sign makes the unsigned transaction (PSBT) of a list of one transaction; a hardware wallet signs each. The list is kept while the user goes to other pages, and exported as CSV (read back by the same import) |
+| Payments | The history of the wallet with a transaction as one row: a batch is "Batch ×N", opened to its recipients (a table of its outputs), paid again from Batch pay (the fee taken out of the first output, as the details of the transaction give it). Totals of what is shown (received, sent, net, the batches and their recipients), the period (7, 30, 90 days, all), the direction, a search by label, address or id; what came in and went out each day as a chart, and the days as a table; the export as CSV, a line a payment or a line a recipient, in the file chooser of the desktop. The history is the kit's (`wallet.transactions`, kept up to date in parts); the tables draw only the rows in view |
+| Throughput | Over the last 30, 100 or 300 blocks (`getblockstats` of each, kept by height, asked only for the new blocks and those near the tip a reorganisation can change): transactions a second and per block (the coinbase not counted), how full the blocks are against 32 million weight units, the fees (in all, per transaction, the median rate), the time between blocks; a chart of each block (its transactions, its fill, those over half full marked) and a table of the blocks (double-click: the explorer). The capacity of the chain (a block holds about 56 700 payments of one input and two outputs) against what it uses. The Mempool tab: what waits, the blocks it would take, its fees and memory, the fee estimates of the node for 1, 6 and 144 blocks (`estimatesmartfee`), the least fee relayed, the transactions of the whole chain and their rate (`getchaintxstats`); kept up to date every 10 s while it shows, resting while the window is hidden |
+| Home | Cards: Throughput (transactions a second, the last block and its fill, what waits, the transactions of each block as a line) and Payments today (in, out, the last batch; Batch pay a click away); the quick action Batch pay |
+
+The rules of the kit hold: text of the chain and of the user (labels, addresses, file names, the lines
+of a file left out, errors of the node) with `SafeText` or `translate="no"`, the app's words through
+`t()`, files only through the file chooser of the desktop, no inline style (bars through the CSS object
+model, charts coloured by classes), colours from the tokens of the themes (the brand's violet for
+strokes only).
 
 ## Tests
 
@@ -408,10 +442,13 @@ not offer, make it a change of the template (generic, behind `chain.json`), and 
 | `e2e/run_node.py` | The node and Chains pages, with a pretend desktop (tray, notifications) and a second node |
 | `e2e/run_audit.py` | The fixes of the audit: the sync overlay, a block built by hand with a title that is not UTF-8, long calls, a history kept up to date in parts, a proof with a locked wallet, contrast measured on what the page draws, aligned tables, the title bar of the desktop or the integrated one, settings that wait for Apply (and the next start), `-disablewallet`, windows 700 and 480 px wide, a hardware wallet (the mock signer of the functional tests), `-lang=fr` |
 | `e2e/run_layouts.py` | The three layouts, the palette, the detail panel, the integrated title bar and the refresh (layouts.js, titlebar.js, refresh.js); pictures of each layout |
-| `e2e/run_windows.py` | From WSL, on the Windows of the machine (`--app build_win/bin/chains-app.exe --unit build_win/bin/test_chains-app.exe --shots <dir>`, in a folder `<stem>-app-test` of the Windows temporary folder, removed at the end): the unit tests, then smoke.js, layouts.js and titlebar.js; for a sidechain sidechain.js, the app on Windows following a regtest mainchain run in WSL |
+| `e2e/run_windows.py` | From WSL, on the Windows of the machine (`--app build_win/bin/chains-app.exe --unit build_win/bin/test_chains-app.exe --shots <dir>`, in a folder `<stem>-app-test` of the Windows temporary folder, removed at the end): the unit tests, then smoke.js, layouts.js and titlebar.js; for a sidechain sidechain.js, the app on Windows following a regtest mainchain run in WSL, and the scripts of its own pages the same way (Thunder: `--scripts sidechain,thunder`) |
 | `e2e/run_sidechain.py` | A sidechain (`webui_e2e_sidechain`, with `WEBUI_MAINCHAIN_BIN_DIR` or `MAINCHAIN_BIN_DIR` naming the folder of `chainsd`): a regtest mainchain started and mining a block every second, the sidechain activated in its slot, the app following it with a user name and a password file; through the page: a deposit address, the deposit made by the helper, merged mining on, the deposit credited, a withdrawal to an address of the mainchain wallet, its bundle voted on and paid (checked on the mainchain); pictures of the pages of the sidechain in the layouts and looks |
 | `e2e/run_release.py` | The release as a user gets it (`deploy-app`, built with `WEBUI_TEST_HOOKS=OFF`; `--windows` for the zip, run on the Windows of the machine): what the package holds and SHA256SUMS, no hooks of the tests in the app; the app run with no test script on regtest against a live mainchain, its node answering the command line program of the package, following the mainchain in its slot, and stopping cleanly |
 | `test_<stem>-app`: chainconfig_tests, sidechainapi_tests | chain.json against the chain parameters (names, unit, ports, prefixes); the methods of the mainchain the pages may call, the deposit helper refusing what is not a deposit address of this sidechain, the RPC policy of a sidechain |
+| `npm test`: chain/thunder.test.ts | Thunder: lists read from pastes and CSV files (separators, quotes, headers in any order, units after amounts, lines left out), checked (addresses of other networks and chains, dust, duplicates in capitals), merged, totalled and cut into transactions, written back as CSV; the history as payments, by day, as CSV; the throughput of blocks; the pages driven against a pretend node: Batch pay from a paste (a right-to-left label shown isolated and untranslated, duplicates merged, problems removed, the confirmation, paid) and from a file chosen on the desktop (paid in two transactions, the second failing: its recipients stay), Payments (a batch opened, paid again), Throughput (a new block asked alone, the mempool, the estimates), the cards of the home, the pages in the menus before the tools, the RPC methods of the pages against rpcpolicy.cpp and local.cpp |
+| `e2e/run_sidechain.py --script thunder.js` (ctest `webui_e2e_thunder`) | Thunder on regtest against a live mainchain: a deposit, merged mining; Batch pay with a recipient typed and forty pasted, the list exported to a CSV file and imported again through the file chooser of the desktop, confirmed and paid in one transaction of 41 outputs, mined (checked in the wallet paid); the batch in Payments and its recipients; the block that carried it in Throughput, the mempool; pictures of every page of Thunder in Midnight and Light, in the dashboard and the workspace |
+| `test_<stem>-app`: local_tests | The methods local.cpp adds in the policy the host builds, read only and never keyed; the methods that send many refused to the page |
 | `npm test`: test/sidechain.test.ts | The chain of chain.json (units, URIs, addresses of both chains), the pages dropped, Peg and Merged mining in the Chain section and the menus, the events of the mainchain kept up to date across a reorganisation, the bundles, deposits and commitments, the log of merged mining, and the pages driven: the deposit helper, a withdrawal and its refund, the votes of the bundle, merged mining on and off and one block by hand, the cards of the home, the Mainchain settings |
 
 Each e2e script takes `--app build/bin/chains-app --tmp <dir> --shots <dir>`;
