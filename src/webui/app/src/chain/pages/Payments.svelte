@@ -112,12 +112,12 @@
 
   const KIND_WORDS = { in: 'Received', out: 'Sent', batch: 'Batch', mined: 'Mined', other: 'Other' } as const;
   const columns: Column<Payment>[] = [
-    { key: 'time', label: 'Date', value: (p) => p.time, width: '9.5rem', noFilter: true },
-    { key: 'kind', label: 'Kind', value: (p) => t(KIND_WORDS[p.kind]), width: '8.5rem', words: true },
-    { key: 'who', label: 'To or from', value: (p) => `${p.label} ${p.address}`, width: 'minmax(12rem, 2fr)' },
-    { key: 'count', label: 'Recipients', value: (p) => p.count, width: '6.5rem', align: 'end', noFilter: true },
-    { key: 'amount', label: 'Amount', value: (p) => p.amount, width: 'minmax(9rem, 1fr)', align: 'end', noFilter: true },
-    { key: 'status', label: 'Status', value: (p) => statusText(p), width: 'minmax(8rem, 1fr)', words: true, noFilter: true },
+    { key: 'time', label: 'Date', value: (p) => p.time, width: '8.8rem', noFilter: true },
+    { key: 'kind', label: 'Kind', value: (p) => t(KIND_WORDS[p.kind]), width: '7rem', words: true },
+    { key: 'who', label: 'To or from', value: (p) => `${p.label} ${p.address}`, width: 'minmax(6rem, 2fr)' },
+    { key: 'count', label: 'Recipients', value: (p) => p.count, width: '5.8rem', align: 'end', noFilter: true },
+    { key: 'amount', label: 'Amount', value: (p) => p.amount, width: 'minmax(8rem, 1fr)', align: 'end', noFilter: true },
+    { key: 'status', label: 'Status', value: (p) => statusText(p), width: 'minmax(6rem, 1fr)', words: true, noFilter: true },
   ];
   // The id is searched too, without a column of its own.
   const searchable = $derived(search.trim() ? shown.filter((p) => p.txid.startsWith(search.trim().toLowerCase())) : []);
@@ -125,10 +125,10 @@
   const filter = $derived(searchable.length ? '' : search);
 
   const recipientColumns: Column<TxRecord>[] = [
-    { key: 'idx', label: 'Output', value: (r) => r.idx, width: '5rem', align: 'end', noFilter: true },
-    { key: 'address', label: 'Address', value: (r) => r.address, width: 'minmax(14rem, 2fr)', mono: true },
-    { key: 'label', label: 'Label', value: (r) => r.label, width: 'minmax(8rem, 1fr)' },
-    { key: 'amount', label: 'Amount', value: (r) => r.amount, width: 'minmax(9rem, 1fr)', align: 'end', noFilter: true },
+    { key: 'idx', label: 'Output', value: (r) => r.idx, width: '4.5rem', align: 'end', noFilter: true },
+    { key: 'address', label: 'Address', value: (r) => r.address, width: 'minmax(8rem, 2fr)', mono: true },
+    { key: 'label', label: 'Label', value: (r) => r.label, width: 'minmax(4rem, 1fr)' },
+    { key: 'amount', label: 'Amount', value: (r) => r.amount, width: 'minmax(8rem, 1fr)', align: 'end', noFilter: true },
   ];
 
   const dayColumns: Column<(typeof days)[number]>[] = [
@@ -181,7 +181,7 @@
 {#if noWallet}
   <NoWallet page={PAGES.payments} />
 {:else}
-  <div class="th-page payments">
+  <div class="page th-page payments">
     <header class="th-head">
       <div>
         <h1>Payments</h1>
@@ -247,7 +247,7 @@
     {#if tab === 'days'}
       <section class="panel">
         <div class="th-table short pad">
-          <DataTable rows={days.filter((d) => d.countIn || d.countOut)} columns={dayColumns} key={(d) => String(d.day)} bind:sortKey={daySort} bind:sortDir={dayDir} label="Payments by day" empty="No payment in this period">
+          <DataTable rows={days.filter((d) => d.countIn || d.countOut)} columns={dayColumns} key={(d) => String(d.day)} bind:sortKey={daySort} bind:sortDir={dayDir} label="Payments by day" empty="No payment in this period" fit>
             {#snippet cell(d, c)}
               {#if c.key === 'day'}<span class="num">{formatTime(d.day).slice(0, 10)}</span>
               {:else if c.key === 'in'}<Amount sats={d.in} />
@@ -276,7 +276,7 @@
           <p class="th-empty">{current.recordsError ? '' : 'Loading the history…'}{#if current.recordsError}<SafeText text={current.recordsError} />{/if}</p>
         {:else}
           <div class="th-table pad">
-            <DataTable {rows} {columns} key={(p) => p.key} {filter} bind:selected bind:sortKey bind:sortDir label="Payments of the wallet" empty={tab === 'batches' ? 'No batch payment yet' : 'No payment in this period'} onactivate={(p) => (p.kind === 'batch' ? (selected = p.key) : (details = p.records[0]))}>
+            <DataTable {rows} {columns} key={(p) => p.key} {filter} bind:selected bind:sortKey bind:sortDir label="Payments of the wallet" fit empty={tab === 'batches' ? 'No batch payment yet' : 'No payment in this period'} onactivate={(p) => (p.kind === 'batch' ? (selected = p.key) : (details = p.records[0]))}>
               {#snippet cell(p, c)}
                 {#if c.key === 'time'}<span class="num">{formatTime(p.time)}</span>
                 {:else if c.key === 'kind'}<span class="th-tag {p.kind}">{t(KIND_WORDS[p.kind])}{#if p.kind === 'batch'}&nbsp;×{p.count}{/if}</span>
@@ -302,7 +302,7 @@
           </div>
           {#if chosen.kind === 'batch'}
             <div class="th-table short pad">
-              <DataTable rows={recipients} columns={recipientColumns} key={(r) => r.key} bind:selected={recipientSel} label="Recipients of the batch" onactivate={(r) => (details = r)}>
+              <DataTable rows={recipients} columns={recipientColumns} key={(r) => r.key} bind:selected={recipientSel} label="Recipients of the batch" fit onactivate={(r) => (details = r)}>
                 {#snippet cell(r, c)}
                   {#if c.key === 'idx'}<span class="num faint">{r.idx}</span>
                   {:else if c.key === 'address'}<SafeText text={r.address} />

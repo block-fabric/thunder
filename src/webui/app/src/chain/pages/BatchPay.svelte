@@ -452,6 +452,11 @@
       // What was paid leaves the list; what was not stays, to send again.
       await setList(draft.list.filter((r) => !paidIds.has(r.id)));
       selected = null;
+      if (!draft.list.length) {
+        draft.source = '';
+        draft.sourceFile = '';
+        draft.skipped = [];
+      }
       done = { txids, count: paid, amount: paidAmount, psbt: false };
       toast('success', t('Batch sent'), tn('%n recipient(s) paid', paid));
       nav.highlightTx = txids[txids.length - 1] ?? null;
@@ -463,17 +468,17 @@
   type Row = Recipient & { n: number };
   const rows = $derived<Row[]>(draft.list.map((r, i) => ({ ...r, n: i + 1 })).filter((r) => show === 'all' || r.problem));
   const columns: Column<Row>[] = [
-    { key: 'n', label: '#', value: (r) => r.n, width: '4rem', align: 'end', noFilter: true },
-    { key: 'address', label: 'Address', value: (r) => r.address, width: 'minmax(14rem, 2.2fr)', mono: true },
-    { key: 'label', label: 'Label', value: (r) => r.label, width: 'minmax(8rem, 1.2fr)' },
-    { key: 'amount', label: 'Amount', value: (r) => r.amount ?? -1n, width: 'minmax(9rem, 1fr)', align: 'end', noFilter: true },
-    { key: 'check', label: 'Check', value: (r) => (r.problem ? t(r.problem) : r.note ? t(r.note) : t('Ready')), width: 'minmax(10rem, 1.4fr)', words: true },
+    { key: 'n', label: '#', value: (r) => r.n, width: '3.4rem', align: 'end', noFilter: true },
+    { key: 'address', label: 'Address', value: (r) => r.address, width: 'minmax(8rem, 2.4fr)', mono: true },
+    { key: 'label', label: 'Label', value: (r) => r.label, width: 'minmax(4rem, 1fr)' },
+    { key: 'amount', label: 'Amount', value: (r) => r.amount ?? -1n, width: 'minmax(7.5rem, 1fr)', align: 'end', noFilter: true },
+    { key: 'check', label: 'Check', value: (r) => (r.problem ? t(r.problem) : r.note ? t(r.note) : t('Ready')), width: 'minmax(5.5rem, 1.1fr)', words: true },
   ];
   let sortKey: string | null = $state('n');
   let sortDir: 'asc' | 'desc' = $state('asc');
 </script>
 
-<div class="th-page batch">
+<div class="page th-page batch">
   <header class="th-head">
     <div>
       <h1>Batch pay</h1>
@@ -537,7 +542,7 @@
           </div>
         {:else}
           <div class="th-table">
-            <DataTable {rows} {columns} key={(r) => String(r.id)} filter={search} bind:selected bind:sortKey bind:sortDir label="Recipients of the batch" empty="No recipient">
+            <DataTable {rows} {columns} key={(r) => String(r.id)} filter={search} bind:selected bind:sortKey bind:sortDir label="Recipients of the batch" empty="No recipient" fit>
               {#snippet cell(r, c)}
                 {#if c.key === 'n'}<span class="faint num">{r.n}</span>
                 {:else if c.key === 'address'}<SafeText text={r.address || '–'} />
@@ -776,6 +781,7 @@
     overflow: auto;
   }
   .unit-pick {
+    white-space: nowrap;
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;

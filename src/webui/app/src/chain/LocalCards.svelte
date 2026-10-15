@@ -62,7 +62,7 @@
     </dl>
     {#if blocks.length > 1}<div class="spark"><Sparkline values={blocks.map((b) => b.txs)} width={220} height={30} /></div>{/if}
     {#snippet actions()}
-      <button type="button" class="btn grow" onclick={() => go('throughput')}><Icon name="gauge" size={15} /> {t('%1 blocks', formatCount(WINDOW))}</button>
+      <button type="button" class="btn grow" onclick={() => go('throughput')}><Icon name="gauge" size={15} /> Blocks</button>
       <button type="button" class="btn ghost" onclick={() => go('throughput', 'mempool')}>Mempool</button>
     {/snippet}
   </Card>

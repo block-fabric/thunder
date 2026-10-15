@@ -56,14 +56,14 @@
   const mempool = $derived(th.mempool);
 
   const columns: Column<BlockStat>[] = [
-    { key: 'height', label: 'Height', value: (b) => b.height, width: '6.5rem', align: 'end' },
-    { key: 'time', label: 'Time', value: (b) => b.time, width: '9.5rem', noFilter: true },
-    { key: 'txs', label: 'Transactions', value: (b) => b.txs, width: '7.5rem', align: 'end', noFilter: true },
-    { key: 'outs', label: 'Outputs', value: (b) => b.outs, width: '6.5rem', align: 'end', noFilter: true },
-    { key: 'fill', label: 'Fill', value: (b) => b.weight, width: 'minmax(9rem, 1.2fr)', noFilter: true },
-    { key: 'fees', label: 'Fees', value: (b) => b.fees, width: 'minmax(8rem, 1fr)', align: 'end', noFilter: true },
-    { key: 'rate', label: 'Median fee rate', value: (b) => b.feeRate, width: '8.5rem', align: 'end', noFilter: true },
-    { key: 'hash', label: 'Hash', value: (b) => b.hash, width: 'minmax(9rem, 1fr)', mono: true },
+    { key: 'height', label: 'Height', value: (b) => b.height, width: '5.2rem', align: 'end' },
+    { key: 'time', label: 'Time', value: (b) => b.time, width: '8.8rem', noFilter: true },
+    { key: 'txs', label: 'Transactions', value: (b) => b.txs, width: '6.8rem', align: 'end', noFilter: true },
+    { key: 'outs', label: 'Outputs', value: (b) => b.outs, width: '5.5rem', align: 'end', noFilter: true },
+    { key: 'fill', label: 'Fill', value: (b) => b.weight, width: 'minmax(7rem, 1.2fr)', noFilter: true },
+    { key: 'fees', label: 'Fees', value: (b) => b.fees, width: 'minmax(7rem, 1fr)', align: 'end', noFilter: true },
+    { key: 'rate', label: 'Fee rate', value: (b) => b.feeRate, width: '6.5rem', align: 'end', noFilter: true },
+    { key: 'hash', label: 'Hash', value: (b) => b.hash, width: 'minmax(6rem, 1fr)', mono: true },
   ];
 
   function rateText(satPerVb: number | null | undefined): string {
@@ -73,7 +73,7 @@
   const fees = (sats: number) => formatAmount(BigInt(Math.round(sats)), prefs.unit, { withUnit: true, trim: true, minDecimals: 2 });
 </script>
 
-<div class="th-page throughput">
+<div class="page th-page throughput">
   <header class="th-head">
     <div>
       <h1>Throughput</h1>
@@ -164,7 +164,7 @@
     <section class="panel" aria-labelledby="tp-blocks">
       <div class="panel-head"><h2 id="tp-blocks">Blocks</h2><span class="faint small">Double-click a block to open it in the block explorer</span></div>
       <div class="th-table pad">
-        <DataTable rows={blocks} {columns} key={(b) => String(b.height)} bind:selected bind:sortKey bind:sortDir label="The latest blocks" empty="No block yet" onactivate={(b) => go('explorer', `search:${b.hash}`)}>
+        <DataTable rows={blocks} {columns} key={(b) => String(b.height)} bind:selected bind:sortKey bind:sortDir label="The latest blocks" empty="No block yet" fit onactivate={(b) => go('explorer', `search:${b.hash}`)}>
           {#snippet cell(b, c)}
             {#if c.key === 'height'}<span class="num">{b.height}</span>
             {:else if c.key === 'time'}<span class="num">{formatTime(b.time)}</span>
