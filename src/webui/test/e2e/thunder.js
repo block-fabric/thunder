@@ -109,6 +109,21 @@
     await check('the file named in the list', text('.batch').includes('batch.csv'));
     await sleep(800);
     await shot('th-batch-list');
+    // Every amount whole, its first digit too, wide and at 420 px (audit port-2 #2: 0.001 read "00100000 CHN").
+    const amountsWhole = () => rows('Recipients of the batch').every((r) => {
+      const cell = [...r.querySelectorAll('[role="gridcell"]')].find((c) => /CHN/.test(c.textContent));
+      const amount = cell && cell.querySelector('.amount');
+      if (!amount) return false;
+      const a = amount.getBoundingClientRect();
+      const c = cell.getBoundingClientRect();
+      return a.left >= c.left - 1 && a.right <= c.right + 1 && amount.scrollWidth <= amount.clientWidth + 1;
+    });
+    await check('the amounts of the list whole', amountsWhole());
+    $('.th-table').style.width = '420px';
+    await sleep(500);
+    await check('the amounts of the list whole at 420 px', amountsWhole());
+    await shot('th-batch-list-420');
+    $('.th-table').style.width = '';
 
     // --- Paid in one transaction ---
     $('#bp-pay').click();
