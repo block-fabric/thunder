@@ -31,8 +31,8 @@ export interface LocalPage {
 }
 
 export const LOCAL_PAGES = [
-  { id: 'batchpay', title: 'Batch pay', icon: 'batch', section: 'wallet', summary: 'Pay many recipients at once: typed, pasted or read from a CSV file, checked and previewed', wallet: true, keywords: 'batch bulk csv import payroll many recipients sendmany airdrop', quick: { label: 'Batch pay', icon: 'batch' } },
-  { id: 'payments', title: 'Payments', icon: 'ledger', section: 'wallet', summary: 'The payments of the wallet, made for many: batches as one, totals by day, export', wallet: true, keywords: 'history payments ledger batches export csv' },
+  { id: 'batchpay', title: 'Batch pay', icon: 'batch', section: 'chain', summary: 'Pay many recipients at once: typed, pasted or read from a CSV file, checked and previewed', wallet: true, keywords: 'batch bulk csv import payroll many recipients sendmany airdrop', quick: { label: 'Batch pay', icon: 'batch' } },
+  { id: 'payments', title: 'Payments', icon: 'ledger', section: 'chain', summary: 'The payments of the wallet, made for many: batches as one, totals by day, export', wallet: true, keywords: 'history payments ledger batches export csv' },
   { id: 'throughput', title: 'Throughput', icon: 'gauge', section: 'chain', summary: 'Transactions per block and per second, how full the blocks are, fees and the mempool', keywords: 'tps capacity block fill fees mempool weight stats' },
 ] as const satisfies readonly LocalPage[];
 

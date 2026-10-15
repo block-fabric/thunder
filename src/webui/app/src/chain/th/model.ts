@@ -4,15 +4,13 @@
 // the statistics of its blocks.
 import { CHAIN } from '../config';
 import { checkAddress, addressTypeOf, networkParams, bech32Decode, base58Decode, NETWORKS } from '../../lib/address';
-import { formatAmount, parseAmount, type Unit } from '../../lib/units';
-import { compareRecords, isoLocal, toCsv, type TxRecord } from '../../lib/wallet';
+import { formatAmount, parseAmount, unitInfo, type Unit } from '../../lib/units';
+import { compareRecords, csvCell, isoLocal, toCsv, type TxRecord } from '../../lib/wallet';
 
 // --- The chain ---
 
 /** The weight a block of Thunder may have (consensus.max_block_weight on every network, chain.json blockWeight): 32 million. */
 export const MAX_BLOCK_WEIGHT = CHAIN.blockWeight ?? 32_000_000;
-/** The weight a standard transaction may have (MAX_STANDARD_TX_WEIGHT): what a node relays and mines. */
-export const MAX_STANDARD_TX_WEIGHT = 392_000;
 /** The recipients of one transaction of a batch: their outputs and the inputs that pay them stay well below a standard transaction. */
 export const PART_SIZE = 1500;
 /** The most recipients a list takes (the table draws only the rows in view; the transactions are sent one after the other). */
@@ -107,6 +105,27 @@ function amountOnly(text: string, unit: Unit, short: string): string {
 }
 
 /**
+ * The text of a file of recipients, or null when it is not text (audit port-2 #12: a binary file was read as
+ * hundreds of garbage recipients). A NUL byte, or more than 1 in 100 characters that are controls other than
+ * tabs and line ends, is not text; UTF-8 first, else Windows-1252 (a spreadsheet's export on Windows).
+ */
+export function textOfFile(bytes: Uint8Array): string | null {
+  if (bytes.includes(0)) return null;
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    text = new TextDecoder('windows-1252').decode(bytes);
+  }
+  let controls = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if ((c < 32 && c !== 9 && c !== 10 && c !== 13) || c === 127 || (c >= 0x80 && c < 0xa0)) controls++;
+  }
+  return controls > text.length / 100 ? null : text;
+}
+
+/**
  * Recipients from text: one a line, the address, the amount and an optional label, separated by a comma,
  * a semicolon, a tab or spaces; a header line naming the columns is read for their order and left out.
  * Amounts are read in `unit`. Nothing is checked against the chain yet (checkRecipients).
@@ -146,7 +165,8 @@ export function parseRecipients(text: string, unit: Unit, unitShort: string, fir
     let label = order.label >= 0 ? (fields[order.label] ?? '') : '';
     // Without a header, the words after the amount are the label (spaces in it too).
     if (!header && separator === ' ' && fields.length > 3) label = fields.slice(2).join(' ');
-    label = label.trim().slice(0, 256);
+    // A label this app exported with a ' before a formula (toCsv) reads back as it was.
+    label = csvCell(label.trim()).slice(0, 256);
     if (!address && !amountText) {
       skipped.push({ line: lineNo, text: raw.slice(0, 120), why: 'No address and no amount' });
       continue;
@@ -209,6 +229,8 @@ export async function checkRecipients(list: readonly Recipient[], network: strin
   const cache = new Map<string, string>();
   const out: Recipient[] = [];
   for (const r of list) {
+    // A long list gives the page a frame every 1000 rows (audit port-2 #12: a stall of 0.9 s at 50 000).
+    if (out.length % 1000 === 999) await new Promise((done) => setTimeout(done, 0));
     const address = r.address.trim();
     let problem = '';
     let note = '';
@@ -284,6 +306,43 @@ export function totalsOf(list: readonly Recipient[], network: string): ListTotal
   // Per transaction: its frame (10.5 vbytes), a change of 31 and the inputs (68 each, one per hundred recipients at least).
   const vsize = ready ? Math.ceil(outputs + parts * (11 + 31) + Math.max(parts, Math.ceil(ready / 100)) * 68) : 0;
   return { count: list.length, ready, problems: list.length - ready, amount, parts, vsize, blockShare: (vsize * 4) / MAX_BLOCK_WEIGHT };
+}
+
+/**
+ * The fees of a batch paid in several transactions, for its confirmation (audit port-2 #1): the first as the
+ * wallet made it, each other one from its size (totalsOf) at the rate of the first (or the rate chosen, if
+ * higher). `total` is what the confirmation shows; each part is held to its estimate (feeOverEstimate).
+ */
+export function partFees(parts: readonly (readonly Recipient[])[], network: string, first: { fee: bigint; vsize: number }, feePerK: number): { fees: bigint[]; total: bigint; vsize: number } {
+  const firstRate = first.vsize > 0 ? Number(first.fee) * 1000 / first.vsize : 0;
+  const rate = Math.max(firstRate, feePerK);
+  const fees: bigint[] = [first.fee];
+  let vsize = first.vsize;
+  for (let k = 1; k < parts.length; k++) {
+    const size = totalsOf(parts[k], network).vsize;
+    vsize += size;
+    fees.push(BigInt(Math.ceil((size * rate) / 1000)));
+  }
+  return { fees, total: fees.reduce((a, b) => a + b, 0n), vsize };
+}
+
+/** A part of a batch whose fee, as the wallet made it, is more than its estimate allows: a fifth above it and 1000 sat. */
+export function feeOverEstimate(actual: bigint, estimate: bigint): boolean {
+  return actual > estimate + estimate / 5n + 1000n;
+}
+
+/**
+ * The width (rem) the Amount column of a list needs so that no amount is cut: its longest amount in the
+ * unit shown, with the unit (a digit is about 0.62 rem in the table, and 1.5 rem of padding), at least 7.5.
+ */
+export function amountColumnRem(list: readonly Recipient[], unit: Unit): number {
+  let longest = 0;
+  for (const r of list) {
+    const n = r.amount === null ? Math.min(r.amountText.length, 24) : formatAmount(r.amount, unit).length;
+    if (n > longest) longest = n;
+  }
+  const chars = longest + 1 + unitInfo(unit).short.length;
+  return Math.max(7.5, Math.ceil((chars * 0.62 + 1.6) * 10) / 10);
 }
 
 /** The recipients that are ready, cut into the transactions that pay them. */

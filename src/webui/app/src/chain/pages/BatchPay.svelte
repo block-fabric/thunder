@@ -30,7 +30,7 @@
   import { CONF_TARGETS, nearestConfTarget, psbtFileName, walletApi, type Outpoint, type Prepared } from '../../lib/wallet';
   import { current, refreshInfo } from '../../lib/walletdata.svelte';
   import '../th/th.css';
-  import { checkRecipients, MAX_BLOCK_WEIGHT, MAX_CSV_BYTES, MAX_RECIPIENTS, mergeDuplicates, newRecipient, PART_SIZE, parseRecipients, partsOf, recipientsCsv, totalsOf, formatShare, type Recipient } from '../th/model';
+  import { amountColumnRem, textOfFile, checkRecipients, feeOverEstimate, MAX_BLOCK_WEIGHT, MAX_CSV_BYTES, MAX_RECIPIENTS, mergeDuplicates, newRecipient, PART_SIZE, parseRecipients, partFees, partsOf, recipientsCsv, totalsOf, formatShare, type Recipient } from '../th/model';
   import { draft } from '../th/store.svelte';
 
   /** Seconds before the send button of the confirmation can be pressed (SEND_CONFIRM_DELAY). */
@@ -228,7 +228,12 @@
         await inform(t('Import payments'), t('The file is too large: at most %1 MB.', MAX_CSV_BYTES / 1_000_000), 'error');
         return;
       }
-      text = new TextDecoder('utf-8').decode(base64ToBytes(file.base64));
+      const read = textOfFile(base64ToBytes(file.base64));
+      if (read === null) {
+        await inform(t('Import payments'), t('This file is not a list of payments: it is not text (a CSV file, or text with a recipient a line).'), 'error');
+        return;
+      }
+      text = read;
     } catch (e) {
       await inform(t('Import payments'), errorText(e), 'error');
       return;
@@ -361,6 +366,13 @@
         return;
       }
     }
+    // Coins chosen in "Choose coins" pay a list of one transaction only (the panel is not offered for more); the
+    // same choice, or none, goes to every part (audit port-2 #1).
+    const coinsChosen = prefs.coinControl && selectedCoins.length > 0;
+    if (coinsChosen && parts.length > 1) {
+      await inform(t('Batch pay'), t('The coins chosen in "Choose coins" pay one transaction, of at most %1 recipients: this list takes %2. Shorten the list, or turn "Choose coins" off.', PART_SIZE, parts.length), 'warning');
+      return;
+    }
     const cc = coinChoice ? { selected: selectedCoins } : {};
     busy = true;
     done = null;
@@ -383,15 +395,21 @@
       return;
     }
     const amount = list.reduce((n, r) => n + r.amount!, 0n);
+    // The fees of all the parts, not of the first only: the first as made, the others estimated at its rate.
+    const estimate = partFees(parts, network, prepared, feeRate);
     const lines = list.slice(0, LISTED).map((r) => (r.label ? `${t("%1 to '%2'", formatAmount(r.amount!, prefs.unit, { withUnit: true }), r.label)} (${r.address})` : t('%1 to %2', formatAmount(r.amount!, prefs.unit, { withUnit: true }), r.address)));
     if (list.length > LISTED) lines.push(t('…and %1 more', list.length - LISTED));
     const kvb = (prepared.vsize / 1000).toPrecision(3);
+    const several = parts.length > 1;
+    const totalPaid = draft.subtractFee ? amount : amount + estimate.total;
     const informative = [
-      parts.length > 1 ? t('%1 transactions of at most %2 recipients, sent one after the other.', parts.length, PART_SIZE) : t('One transaction of %1 vbytes, %2 of a block.', prepared.vsize, formatShare((prepared.vsize * 4) / MAX_BLOCK_WEIGHT)),
-      t('Transaction fee (%1 kvB): %2', kvb, formatAmount(prepared.fee, prefs.unit, { withUnit: true })),
-      parts.length > 1 ? t('The fee of the others is worked out as each is made, at the same rate.') : '',
+      several ? t('%1 transactions of at most %2 recipients, sent one after the other.', parts.length, PART_SIZE) : t('One transaction of %1 vbytes, %2 of a block.', prepared.vsize, formatShare((prepared.vsize * 4) / MAX_BLOCK_WEIGHT)),
+      several
+        ? t('Transaction fees of the %1 transactions (about %2 kvB): about %3', parts.length, (estimate.vsize / 1000).toPrecision(3), formatAmount(estimate.total, prefs.unit, { withUnit: true }))
+        : t('Transaction fee (%1 kvB): %2', kvb, formatAmount(prepared.fee, prefs.unit, { withUnit: true })),
+      several ? t('The fee of the first is %1; the others are worked out at its rate, and a transaction whose fee comes out higher asks first.', formatAmount(prepared.fee, prefs.unit, { withUnit: true })) : '',
       draft.subtractFee ? t('The fee is taken from the amounts, shared equally.') : '',
-      t('Total Amount: %1', formatAmount(draft.subtractFee ? amount : amount + prepared.fee, prefs.unit, { withUnit: true })),
+      several ? t('Total Amount, about: %1', formatAmount(totalPaid, prefs.unit, { withUnit: true })) : t('Total Amount: %1', formatAmount(totalPaid, prefs.unit, { withUnit: true })),
     ]
       .filter(Boolean)
       .join('\n');
@@ -427,7 +445,26 @@
       progress = { part: 1, parts: parts.length, paid: 0 };
       for (let k = 0; k < parts.length; k++) {
         progress = { part: k + 1, parts: parts.length, paid };
-        if (k > 0) prepared = await api.prepare(recipientsOf(parts[k]), {}, feeChoice, passphrase);
+        if (k > 0) {
+          prepared = await api.prepare(recipientsOf(parts[k]), cc, feeChoice, passphrase);
+          // Held to what the confirmation showed: a fee above its estimate is asked about before it is paid.
+          if (feeOverEstimate(prepared.fee, estimate.fees[k])) {
+            const more = await ask({
+              title: t('Confirm batch payment'),
+              message: t('Transaction %1 of %2 costs more than shown: %3 instead of about %4.', k + 1, parts.length, formatAmount(prepared.fee, prefs.unit, { withUnit: true }), formatAmount(estimate.fees[k], prefs.unit, { withUnit: true })),
+              informative: tn('%n recipient(s) of the list are paid already.', paid),
+              level: 'warning',
+              choices: [
+                { id: 'stop', label: 'Stop here' },
+                { id: 'go', label: 'Pay it', kind: 'primary', delay: SEND_CONFIRM_DELAY },
+              ],
+            });
+            if (more.choice !== 'go') {
+              api.discard(prepared.token).catch(() => undefined);
+              break;
+            }
+          }
+        }
         const result = await api.commit(prepared!.token);
         if (!result.complete && result.psbt) {
           // A hardware wallet signed only part of it (a multisig wallet): the rest goes to the user.
@@ -467,13 +504,18 @@
 
   type Row = Recipient & { n: number };
   const rows = $derived<Row[]>(draft.list.map((r, i) => ({ ...r, n: i + 1 })).filter((r) => show === 'all' || r.problem));
-  const columns: Column<Row>[] = [
-    { key: 'n', label: '#', value: (r) => r.n, width: '3.4rem', align: 'end', noFilter: true },
-    { key: 'address', label: 'Address', value: (r) => r.address, width: 'minmax(8rem, 2.4fr)', mono: true },
-    { key: 'label', label: 'Label', value: (r) => r.label, width: 'minmax(4rem, 1fr)' },
-    { key: 'amount', label: 'Amount', value: (r) => r.amount ?? -1n, width: 'minmax(7.5rem, 1fr)', align: 'end', noFilter: true },
-    { key: 'check', label: 'Check', value: (r) => (r.problem ? t(r.problem) : r.note ? t(r.note) : t('Ready')), width: 'minmax(5.5rem, 1.1fr)', words: true },
-  ];
+  // The Amount column is never narrower than its longest amount with its unit (audit port-2 #2: an amount
+  // must never be read cut); in a narrow panel the row number and the label step aside for it.
+  let tableWidth = $state(0);
+  const narrow = $derived(tableWidth > 0 && tableWidth < 600);
+  const amountWidth = $derived(amountColumnRem(draft.list, prefs.unit));
+  const columns = $derived<Column<Row>[]>([
+    ...(narrow ? [] : [{ key: 'n', label: '#', value: (r: Row) => r.n, width: '3.4rem', align: 'end', noFilter: true } as Column<Row>]),
+    { key: 'address', label: 'Address', value: (r) => r.address, width: narrow ? 'minmax(5rem, 1fr)' : 'minmax(8rem, 2.4fr)', mono: true },
+    ...(narrow ? [] : [{ key: 'label', label: 'Label', value: (r: Row) => r.label, width: 'minmax(4rem, 1fr)' } as Column<Row>]),
+    { key: 'amount', label: 'Amount', value: (r) => r.amount ?? -1n, width: `minmax(${amountWidth}rem, ${narrow ? 'auto' : '1fr'})`, align: 'end', noFilter: true },
+    { key: 'check', label: 'Check', value: (r) => (r.problem ? t(r.problem) : r.note ? t(r.note) : t('Ready')), width: narrow ? 'minmax(4.5rem, 0.8fr)' : 'minmax(7rem, 1.1fr)', words: true },
+  ]);
   let sortKey: string | null = $state('n');
   let sortDir: 'asc' | 'desc' = $state('asc');
 </script>
@@ -541,7 +583,7 @@
             <p class="faint small">The first line may name the columns (address, amount, label, in any order). Amounts are read in the unit chosen above.</p>
           </div>
         {:else}
-          <div class="th-table">
+          <div class="th-table" bind:clientWidth={tableWidth}>
             <DataTable {rows} {columns} key={(r) => String(r.id)} filter={search} bind:selected bind:sortKey bind:sortDir label="Recipients of the batch" empty="No recipient" fit>
               {#snippet cell(r, c)}
                 {#if c.key === 'n'}<span class="faint num">{r.n}</span>

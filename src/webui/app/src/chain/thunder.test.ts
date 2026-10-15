@@ -29,6 +29,10 @@ import {
   newRecipient,
   PART_SIZE,
   parseRecipients,
+  partFees,
+  feeOverEstimate,
+  amountColumnRem,
+  textOfFile,
   partsOf,
   paymentsCsv,
   paymentsOf,
@@ -134,6 +138,10 @@ async function fakeNode(r: BridgeRequest): Promise<unknown> {
       return { complete: true, txid: id(String(p.token).slice(1)) };
     case 'wallet.send.discard':
       return true;
+    case 'wallet.coins':
+      return [{ address: A, label: '', coins: [{ txid: 'cc'.repeat(32), vout: 0, address: A, label: '', sats: 1_000 * 100_000_000, time: 1_700_000_000, depth: 10, locked: false }] }];
+    case 'wallet.coinControl.summary':
+      return { quantity: 1, amount: 1e11, fee: 300, afterFee: 1e11 - 300, bytes: 150, change: 0, changeEnabled: true, insufficient: false, feeVary: 1, spent: [] };
     case 'wallet.transactions':
       return { height: 12, hash: 'h', maturity: 100, records: RECORDS };
     case 'wallet.transaction':
@@ -330,11 +338,13 @@ describe('the throughput, from the statistics of the blocks', () => {
 });
 
 describe.runIf(CHAIN.name === 'Thunder')('the pages of Thunder', () => {
-  it('are in the Wallet and Chain sections and the menus, before the tools, with their quick action; thunder: links', () => {
+  it('are in the Chain section and the menus, before the tools, with their quick action; thunder: links', () => {
     const own = (LOCAL_PAGES as readonly LocalPage[]).map((p) => p.id);
     expect(own).toEqual(['batchpay', 'payments', 'throughput']);
-    expect(NAV_SECTIONS.find((s) => s.title === 'Wallet')!.pages).toEqual(['overview', 'send', 'receive', 'transactions', 'wallets', 'advanced', 'batchpay', 'payments']);
-    expect(NAV_SECTIONS.find((s) => s.title === 'Chain')!.pages).toEqual(['peg', 'bmm', 'throughput', 'explorer']);
+    // The Wallet section is the user's six (audit port-2 #9); Thunder's pages are under Chain.
+    expect(NAV_SECTIONS.find((s) => s.title === 'Wallet')!.pages).toEqual(['overview', 'send', 'receive', 'transactions', 'wallets', 'advanced']);
+    expect(NAV_SECTIONS.find((s) => s.title === 'Chain')!.pages).toEqual(['peg', 'bmm', 'batchpay', 'payments', 'throughput', 'explorer']);
+    expect(AREAS.find((a) => a.id === 'wallet')!.tabs.map((t) => t.page)).not.toContain('batchpay');
     expect(AREAS.find((a) => a.id === 'chain')!.tabs.map((t) => t.page)).toContain('throughput');
     expect(chainBeforeTools(HOME_QUICK_ACTIONS.map((q) => q.page), (p) => p)).toBeNull();
     expect(HOME_QUICK_ACTIONS.map((q) => q.label)).toContain('Batch pay');
@@ -400,13 +410,95 @@ describe.runIf(CHAIN.name === 'Thunder')('the pages of Thunder', () => {
     expect(screen.getByText('payroll.csv').getAttribute('translate')).toBe('no');
     await fireEvent.click(document.querySelector('#bp-pay')!);
     await waitFor(() => expect(document.body.textContent).toContain('2 transactions of at most'));
+    // The fees of both, not of the first only (audit port-2 #1): the first as made (1000 sat), the second at its rate.
+    const second = BigInt(Math.ceil((totalsOf(draft.list.slice(PART_SIZE), 'regtest').vsize * Math.max(1000 * 1000 / (31 * PART_SIZE + 110), 2000)) / 1000));
+    const fees = 1000n + second;
+    const shown = (sats: bigint) => (Number(sats) / 1e8).toFixed(8);
+    expect(document.body.textContent).toContain(`Transaction fees of the 2 transactions`);
+    expect(document.body.textContent).toContain(`about ${shown(fees)} CHN`);
+    expect(document.body.textContent).toContain(`Total Amount, about: ${shown(BigInt(PART_SIZE + 2) * 100_000n + fees)} CHN`);
     await answer('send', 5000);
+    // The second costs more than shown (2000 sat): it asks before it is paid.
+    await waitFor(() => expect(document.body.textContent).toContain('Transaction 2 of 2 costs more than shown: 0.00002000 CHN'));
+    await answer('go', 5000);
     // The first is paid; the second fails: an error, and its recipients stay in the list.
     await waitFor(() => expect(screen.getByText(/were paid, in 1 transactions; the others were not: Insufficient funds/)).toBeTruthy());
     expect(called('wallet.send.prepare').map((c) => ((c.params as { recipients: unknown[] }).recipients).length)).toEqual([PART_SIZE, 2]);
     await answer('ok');
     await waitFor(() => expect(draft.list.length).toBe(2));
   }, 20000);
+
+  it('Batch pay: a part that would cost more than shown is not paid when the user stops; coins chosen pay one transaction only', async () => {
+    fileText = ['address;amount', ...Array.from({ length: PART_SIZE + 2 }, (_, i) => `${addr(i)};0,001`)].join('\n');
+    go('batchpay', 'import');
+    render(BatchPay);
+    render(DialogHost);
+    await waitFor(() => expect(draft.list.length).toBe(PART_SIZE + 2));
+    await waitFor(() => expect(draft.list.every((r) => !r.problem)).toBe(true));
+    await fireEvent.click(document.querySelector('#bp-pay')!);
+    await answer('send', 5000);
+    await waitFor(() => expect(document.body.textContent).toContain('Transaction 2 of 2 costs more than shown'));
+    await answer('stop');
+    await waitFor(() => expect(draft.list.length).toBe(2));
+    expect(called('wallet.send.commit').map((c) => (c.params as { token: string }).token)).toEqual(['t1']);
+    expect(called('wallet.send.discard').map((c) => (c.params as { token: string }).token)).toContain('t2');
+  }, 30000);
+
+  it('Batch pay: coins chosen for a list of one transaction are not taken for a list that grew to several (audit port-2 #1)', async () => {
+    prefs.coinControl = true;
+    render(BatchPay);
+    render(DialogHost);
+    await waitFor(() => expect(called('wallet.fee').length).toBeGreaterThan(0));
+    await fireEvent.click(screen.getByRole('button', { name: /Paste/ }));
+    await fireEvent.input(document.querySelector('#bp-paste')!, { target: { value: `${A},1\n${B},2` } });
+    await fireEvent.submit(document.querySelector('#bp-paste-form')!);
+    await waitFor(() => expect(draft.list.filter((r) => !r.problem).length).toBe(2));
+    const coin = await screen.findByRole('checkbox', { name: 'Spend this coin' });
+    await fireEvent.click(coin);
+    await waitFor(() => expect(called('wallet.coinControl.summary').length).toBeGreaterThan(0));
+    // The list grows past one transaction: the panel steps aside, and paying refuses the coins chosen.
+    await fireEvent.click(screen.getByRole('button', { name: /Paste/ }));
+    await fireEvent.input(document.querySelector('#bp-paste')!, { target: { value: Array.from({ length: PART_SIZE + 10 }, (_, i) => `${addr(i)},0.001`).join('\n') } });
+    await fireEvent.submit(document.querySelector('#bp-paste-form')!);
+    await waitFor(() => expect(draft.list.filter((r) => !r.problem).length).toBeGreaterThan(PART_SIZE));
+    expect(screen.getByText(/The list takes 2 transactions: the wallet chooses their coins/)).toBeTruthy();
+    calls.length = 0;
+    await fireEvent.click(document.querySelector('#bp-pay')!);
+    // (Some of the pretend addresses repeat A and B: the rows to look at are left out.)
+    await answer('go');
+    await waitFor(() => expect(document.body.textContent).toContain('The coins chosen in "Choose coins" pay one transaction'));
+    expect(called('wallet.send.prepare').length).toBe(0);
+    await answer('ok');
+  }, 30000);
+
+  it('the fees of the parts, the width of amounts, files that are not text, labels read back', () => {
+    const part = (n: number) => Array.from({ length: n }, (_, i) => newRecipient({ address: addr(i), amount: 100_000n }));
+    const parts = [part(1500), part(1500), part(10)];
+    const est = partFees(parts, 'regtest', { fee: 46_612n, vsize: 46_612 }, 1000);
+    // At the first's rate (1 sat/vB): each other from its size.
+    expect(est.fees[0]).toBe(46_612n);
+    expect(est.fees[1]).toBe(BigInt(totalsOf(parts[1], 'regtest').vsize));
+    expect(est.total).toBe(est.fees.reduce((a, b) => a + b, 0n));
+    // A higher rate chosen wins over the first's.
+    expect(partFees(parts, 'regtest', { fee: 1000n, vsize: 1000 }, 5000).fees[2]).toBe(BigInt(Math.ceil(totalsOf(parts[2], 'regtest').vsize * 5)));
+    expect([feeOverEstimate(1200n, 1000n), feeOverEstimate(2201n, 1000n), feeOverEstimate(100_000n, 80_000n)]).toEqual([false, true, true]);
+    // The Amount column fits its longest amount and its unit: 0.00100000 CHN whole.
+    expect(amountColumnRem([newRecipient({ amount: 100_000n })], 'CHN')).toBeGreaterThanOrEqual(('0.00100000 CHN'.length * 0.62) + 1.5);
+    expect(amountColumnRem([newRecipient({ amount: 2_100_000_000_000_000n })], 'CHN')).toBeGreaterThan(14);
+    expect(amountColumnRem([], 'sat')).toBe(7.5);
+    // A binary file is not a list of payments; text in UTF-8 or Windows-1252 is.
+    expect(textOfFile(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00, 0x14]))).toBeNull();
+    expect(textOfFile(new Uint8Array(Array.from({ length: 400 }, (_, i) => (i * 37) % 32 === 0 ? 1 : 0x41 + (i % 26))))).toBeNull();
+    expect(textOfFile(new TextEncoder().encode(`${A},1,Zoë\n`))).toBe(`${A},1,Zoë\n`);
+    expect(textOfFile(new Uint8Array([0x61, 0x2c, 0x31, 0x2c, 0x5a, 0x6f, 0xeb]))).toBe('a,1,Zoë');
+    // A label exported with a ' before a formula reads back as it was; the file never holds the formula bare.
+    const list = [newRecipient({ address: A, amount: 100_000n, label: "=cmd|' /C calc'!A0" })];
+    const csv = recipientsCsv(list, 'CHN');
+    expect(csv).toContain(`"'=cmd|' /C calc'!A0"`);
+    expect(parseRecipients(csv, 'CHN', 'CHN').recipients[0].label).toBe("=cmd|' /C calc'!A0");
+    // No constant of the standard weight of a transaction the node does not have (audit port-2 #15).
+    expect(readFileSync(join(__dirname, 'th/model.ts'), 'utf8')).not.toContain('392_000');
+  });
 
   it('Payments: a batch is one row; opened, its recipients; paid again into Batch pay, the fee taken out', async () => {
     render(Payments);
