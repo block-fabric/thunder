@@ -2,8 +2,11 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-// The host side of the pages of this chain of its own (src/webui/app/src/chain/local.ts). The template
-// has none: a sidechain made from it adds its RPC methods and host methods here. See doc/webui.md.
+// The host side of the pages of Thunder (src/webui/app/src/chain/local.ts): the RPC methods they call
+// beyond those of the kit. Batch pay sends through the wallet functions of the kit (wallet.send.*, with
+// many recipients), Payments reads the history of the kit (wallet.transactions), and Throughput reads the
+// statistics of the blocks (getblockstats) and the mempool (getmempoolinfo), which the kit allows; what it
+// adds is read only.
 
 #include <webui/local.h>
 
@@ -11,13 +14,17 @@ namespace webui::local {
 
 std::map<std::string, Bridge::Thread> RpcMethods()
 {
-    // For example: {"listnames", Bridge::Thread::WORKER}, {"registername", Bridge::Thread::WORKER}.
-    return {};
+    return {
+        // Throughput: the fee estimates of the node, for a block soon and later.
+        {"estimatesmartfee", Bridge::Thread::WORKER},
+        // Throughput: the transactions of the whole chain, and their rate over a window of blocks.
+        {"getchaintxstats", Bridge::Thread::WORKER},
+    };
 }
 
 std::set<std::string> KeyedRpcMethods()
 {
-    // For example: {"registername"}.
+    // None: the pages of Thunder sign through the wallet functions of the kit (wallet.send.prepare).
     return {};
 }
 

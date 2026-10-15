@@ -1,0 +1,311 @@
+/* The look of the pages of Thunder: figures in tiles with a bolt of the brand along their top, dense
+   tables for long lists, charts drawn in the tokens of the theme. Colours are tokens of themes.css (text
+   in the text tokens, the brand only for strokes and marks), so that every look keeps its contrast. */
+
+.th-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+  /* The splits of the pages follow the width of the page (a panel of the workspace), not of the window. */
+  container-type: inline-size;
+}
+
+.th-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+}
+.th-head h1 {
+  margin: 0;
+}
+.th-head .th-sub {
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+.th-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* Figures: a row of tiles that wraps. */
+.th-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(11.5rem, 100%), 1fr));
+  gap: 0.75rem;
+}
+.th-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem 0.8rem;
+  min-width: 0;
+  overflow: hidden;
+}
+.th-tile::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--brand, var(--accent)), transparent 85%);
+  opacity: 0.85;
+}
+.th-tile .th-k {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.th-tile .th-v {
+  font-family: var(--font-num);
+  font-size: 1.45rem;
+  font-weight: 650;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.th-tile .th-v small {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 0.2rem;
+}
+.th-tile .th-n {
+  color: var(--text-faint);
+  font-size: 0.82rem;
+}
+.th-up {
+  color: var(--positive);
+}
+.th-down {
+  color: var(--negative);
+}
+.th-warn {
+  color: var(--warning);
+}
+
+/* Chips that filter: one pressed at a time. */
+.th-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.th-chips button {
+  padding: 0.25rem 0.75rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+.th-chips button:hover {
+  color: var(--text);
+}
+.th-chips button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+}
+.th-chips .th-count {
+  margin-left: 0.3rem;
+  font-family: var(--font-num);
+  font-size: 0.8rem;
+}
+
+/* A panel whose table fills it. */
+.th-table {
+  height: min(62vh, 38rem);
+  min-height: 14rem;
+}
+.th-table.short {
+  height: min(40vh, 22rem);
+}
+
+.th-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 21rem);
+  gap: 1rem;
+  align-items: start;
+}
+@container (max-width: 860px) {
+  .th-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.th-aside {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1rem;
+}
+.th-aside h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* Key and value lines. */
+.th-pairs {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 0.8rem;
+  margin: 0;
+  font-size: 0.92rem;
+}
+.th-pairs dt {
+  color: var(--text-muted);
+}
+.th-pairs dd {
+  margin: 0;
+  text-align: end;
+  font-family: var(--font-num);
+  overflow-wrap: anywhere;
+}
+
+.th-big {
+  font-family: var(--font-num);
+  font-size: 1.7rem;
+  font-weight: 650;
+  line-height: 1.15;
+}
+
+.th-empty {
+  margin: 0;
+  padding: 1.6rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.th-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+/* A kind of payment or a check, in a pill. */
+.th-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.05rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--raised);
+  color: var(--text-muted);
+}
+.th-tag.in {
+  background: var(--accent-soft);
+  color: var(--positive);
+}
+.th-tag.out {
+  background: var(--danger-soft);
+  color: var(--negative);
+}
+.th-tag.batch {
+  background: var(--accent-soft);
+  color: var(--accent-fg);
+}
+.th-tag.bad {
+  background: var(--danger-soft);
+  color: var(--negative);
+}
+.th-tag.ok {
+  background: var(--accent-soft);
+  color: var(--positive);
+}
+
+/* Charts: drawn in SVG, coloured by classes (no inline styles). */
+.th-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.th-chart .grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.th-chart .bar {
+  fill: var(--accent);
+  opacity: 0.85;
+}
+.th-chart .bar.out {
+  fill: var(--negative);
+  opacity: 0.75;
+}
+.th-chart .bar.hot {
+  fill: var(--warning);
+}
+.th-chart .bar:hover {
+  opacity: 1;
+}
+.th-chart .line {
+  fill: none;
+  stroke: var(--brand, var(--accent));
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.th-chart .area {
+  fill: var(--chart-fill, var(--accent-soft));
+  opacity: 0.6;
+}
+.th-chart text {
+  fill: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-num);
+}
+
+.th-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+.th-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-right: 0.35rem;
+  border-radius: 2px;
+  background: var(--accent);
+  vertical-align: -0.05rem;
+}
+.th-legend .out::before {
+  background: var(--negative);
+}
+.th-legend .line::before {
+  height: 2px;
+  vertical-align: 0.2rem;
+  background: var(--brand, var(--accent));
+}
+.th-legend .hot::before {
+  background: var(--warning);
+}
+
+/* Progress of a batch sent in several transactions. */
+.th-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--surface-2);
+}

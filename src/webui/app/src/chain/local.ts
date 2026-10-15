@@ -2,13 +2,11 @@
 // LocalPages.svelte, which shows them, and chain.json) that a chain made from the template changes, so
 // that merges of the template stay clean. See doc/webui.md, "Pages of a chain of its own".
 //
-// The template has none. A sidechain adds an entry per page, for example
-//
-//   { id: 'names', title: 'Names', icon: 'book', section: 'chain', summary: 'Register and manage names', wallet: true,
-//     quick: { label: 'Register a name' }, keywords: 'bitnames register' }
-//
-// then its component in LocalPages.svelte, the RPC methods it calls in src/webui/local.cpp, and a
-// command or a dashboard card if it wants one (LOCAL_COMMANDS, LocalCards in LocalPages.svelte).
+// Thunder, the chain of large blocks: batch payments (many recipients in one transaction, from a list, a
+// paste or a CSV file), a history of payments made for many of them, and the throughput of the chain
+// (transactions per block, how full the blocks are against 32 million weight units, fees, the mempool);
+// their components in chain/pages and chain/th, the cards of the home in LocalCards.svelte, their icons in
+// icons.ts, their RPC methods in src/webui/local.cpp.
 import type { IconName } from '../components/Icon.svelte';
 
 export interface LocalPage {
@@ -32,7 +30,11 @@ export interface LocalPage {
   quick?: { label: string; icon?: IconName; tab?: string };
 }
 
-export const LOCAL_PAGES = [] as const satisfies readonly LocalPage[];
+export const LOCAL_PAGES = [
+  { id: 'batchpay', title: 'Batch pay', icon: 'batch', section: 'wallet', summary: 'Pay many recipients at once: typed, pasted or read from a CSV file, checked and previewed', wallet: true, keywords: 'batch bulk csv import payroll many recipients sendmany airdrop', quick: { label: 'Batch pay', icon: 'batch' } },
+  { id: 'payments', title: 'Payments', icon: 'ledger', section: 'wallet', summary: 'The payments of the wallet, made for many: batches as one, totals by day, export', wallet: true, keywords: 'history payments ledger batches export csv' },
+  { id: 'throughput', title: 'Throughput', icon: 'gauge', section: 'chain', summary: 'Transactions per block and per second, how full the blocks are, fees and the mempool', keywords: 'tps capacity block fill fees mempool weight stats' },
+] as const satisfies readonly LocalPage[];
 
 export type LocalPageId = (typeof LOCAL_PAGES)[number]['id'];
 
@@ -46,4 +48,9 @@ export interface LocalCommand {
   keywords?: string;
 }
 
-export const LOCAL_COMMANDS = [] as const satisfies readonly LocalCommand[];
+export const LOCAL_COMMANDS = [
+  { id: 'th.import', label: 'Import payments from a CSV file…', page: 'batchpay', tab: 'import', tip: 'Read the recipients of a batch payment from a CSV file', keywords: 'csv import batch' },
+  { id: 'th.paste', label: 'Paste a list of payments…', page: 'batchpay', tab: 'paste', tip: 'Paste recipients and amounts, one a line', keywords: 'paste batch list' },
+  { id: 'th.batches', label: 'Batch payments made', page: 'payments', tab: 'batches', tip: 'The transactions of the wallet that paid several recipients', keywords: 'batches history' },
+  { id: 'th.mempool', label: 'Mempool and fees', page: 'throughput', tab: 'mempool', tip: 'What waits for a block, and the fees to get into one', keywords: 'mempool fees estimate' },
+] as const satisfies readonly LocalCommand[];
