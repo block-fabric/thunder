@@ -54,11 +54,11 @@
     await waitFor('the node to run', () => T() && T().app.phase === 'ready' && T().node.tip, 120000);
     await waitFor('the node to reach the mainchain', async () => (await rpc('getmainchaininfo')).connected, 60000);
     await check('Thunder, the dashboard and Midnight by default', T().app.info.name === 'Thunder' && T().prefs.layout === 'dashboard' && (T().prefs.theme ?? 'midnight') === 'midnight', `${T().app.info.name} ${T().prefs.layout}`);
-    // In the Chain section, after Drivechains and Merged mining: the Wallet section is the user's six pages (audit port-2 #9).
+    // In the Chain section, after Drivechains (Merged mining is a tab of it): the Wallet section is the user's six pages (audit port-2 #9).
     const bar = text('nav.sidebar');
     const at = (w) => bar.indexOf(w);
-    await check('the pages of Thunder in the sidebar, in the Chain section after Merged mining',
-      at('Advanced transactions') >= 0 && at('Advanced transactions') < at('Drivechains') && at('Merged mining') < at('Batch pay') && at('Batch pay') < at('Payments') && at('Payments') < at('Throughput'), bar);
+    await check('the pages of Thunder in the sidebar, in the Chain section after Drivechains',
+      at('Advanced transactions') >= 0 && at('Advanced transactions') < at('Drivechains') && at('Merged mining') < 0 && at('Drivechains') < at('Batch pay') && at('Batch pay') < at('Payments') && at('Payments') < at('Throughput'), bar);
 
     // --- A wallet with coins, and one to pay ---
     await rpc('createwallet', ['th']);

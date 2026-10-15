@@ -343,7 +343,7 @@ describe.runIf(CHAIN.name === 'Thunder')('the pages of Thunder', () => {
     expect(own).toEqual(['batchpay', 'payments', 'throughput']);
     // The Wallet section is the user's six (audit port-2 #9); Thunder's pages are under Chain.
     expect(NAV_SECTIONS.find((s) => s.title === 'Wallet')!.pages).toEqual(['overview', 'send', 'receive', 'transactions', 'wallets', 'advanced']);
-    expect(NAV_SECTIONS.find((s) => s.title === 'Chain')!.pages).toEqual(['peg', 'bmm', 'batchpay', 'payments', 'throughput', 'explorer']);
+    expect(NAV_SECTIONS.find((s) => s.title === 'Chain')!.pages).toEqual(['peg', 'batchpay', 'payments', 'throughput', 'explorer']);
     expect(AREAS.find((a) => a.id === 'wallet')!.tabs.map((t) => t.page)).not.toContain('batchpay');
     expect(AREAS.find((a) => a.id === 'chain')!.tabs.map((t) => t.page)).toContain('throughput');
     expect(chainBeforeTools(HOME_QUICK_ACTIONS.map((q) => q.page), (p) => p)).toBeNull();
