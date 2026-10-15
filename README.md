@@ -13,11 +13,16 @@ mainchain and withdrawn back to it.
 | RPC port | 9754 (testnet 19754, signet 39754, regtest 29754) |
 
 Thunder is the [sidechain template](doc/sidechain.md) of Chains with its own identity and a larger block. A Thunder node needs a
-Chains node (`chainsd` or `chains-qt`) to follow, reached over its RPC interface.
+Chains node (`chainsd` or `chains-app`) to follow, reached over its RPC interface.
+
+Its GUI is `thunder-app`: the node and its wallet with an HTML interface in a native web view
+(WebKitGTK on Linux, WebView2 on Windows), with pages made for volume: batch payments from a list or a
+CSV file, a payment history for many transactions, and the throughput of the chain
+([doc/webui.md](doc/webui.md)). There is no Qt GUI.
 
 ## Installing
 
-Builds for Linux (x86-64) are at https://blockfab.org/drivechains/. Unpack, check `sha256sum -c SHA256SUMS`, and run what is in `bin/`. The wallet needs the Qt libraries of the system (on Ubuntu 24.04: `sudo apt install libqt6widgets6 libqt6network6 libqt6dbus6 libqrencode4 libsqlite3-0`); the node and the tools need none of them.
+Builds for Linux (x86-64) are at https://blockfab.org/drivechains/. Unpack, check `sha256sum -c SHA256SUMS`, and run what is in `bin/`. The app needs WebKitGTK (on Ubuntu 24.04: `sudo apt install libwebkit2gtk-4.1-0 libsqlite3-0`); the node and the tools need none of it. On Windows, the installer or the zip of `thunder-app` (the WebView2 Runtime of Windows 10 and 11).
 
 ## Building from source
 
@@ -25,21 +30,22 @@ On Debian or Ubuntu (24.04):
 
 ```sh
 sudo apt install build-essential cmake pkgconf python3 libevent-dev libboost-dev \
-    libsqlite3-dev libzmq3-dev qt6-base-dev qt6-tools-dev qt6-l10n-tools libqrencode-dev
-git clone https://github.com/block-fabric/thunder.git
-cd thunder
-cmake -B build -DBUILD_GUI=ON
+    libsqlite3-dev libzmq3-dev libgtk-3-dev libwebkit2gtk-4.1-dev nodejs npm
+git clone https://github.com/block-fabric/thunder-app.git
+cd thunder-app
+cmake -B build
 cmake --build build -j$(nproc)
 ```
 
-Leave out `-DBUILD_GUI=ON` (and the Qt packages) for a node without a window. Other systems and
-options: [doc/build-unix.md](doc/build-unix.md) and the other `doc/build-*.md`.
+`-DBUILD_WEBUI=OFF` (and no GTK, WebKitGTK or Node.js) for a node without a window. Windows: cross-built
+with the depends system (`make -C depends HOST=x86_64-w64-mingw32 NO_QT=1`), see [doc/webui.md](doc/webui.md).
+Other systems and options: [doc/build-unix.md](doc/build-unix.md) and the other `doc/build-*.md`.
 
 The programs, in `build/bin`:
 
 | Program | What it is |
 |---|---|
-| `thunder-qt` | the wallet, with its window |
+| `thunder-app` | the wallet, with its window |
 | `thunderd` | the node, without a window |
 | `thunder-cli` | commands for a running node or wallet |
 | `thunder-wallet`, `thunder-tx`, `thunder-util` | tools that work without a node |
@@ -53,14 +59,14 @@ set to the folder of its programs.
 First a Chains node, with RPC on (`server=1` in `chains.conf`, or `-server`), on the same network.
 
 The simplest is to let the Chains wallet run Thunder: in its **Sidechain Nodes** window, select
-Thunder, press **Locate programs…** and choose the folder with `thunderd` and `thunder-qt`, then **Start node**
+Thunder, press **Locate programs…** and choose the folder with `thunderd` and `thunder-app`, then **Start node**
 or **Open wallet**.
 
 By hand, on the same computer as the Chains node:
 
 ```sh
-thunder-qt                 # the main network
-thunder-qt -testnet        # the test network
+thunder-app                # the main network
+thunder-app -testnet       # the test network
 ```
 
 It finds the Chains node by itself: RPC on 127.0.0.1 at the port of the network, and the cookie
@@ -104,12 +110,12 @@ options are read only from the `[test]` section.
 
 ## Coins in and out
 
-- **Deposit.** In Thunder, get a deposit address (`getdepositaddress`, or the **Mainchain** page):
+- **Deposit.** In Thunder, get a deposit address (`getdepositaddress`, or the **Peg** page):
   `s2_<address>_<checksum>`. In Chains, send to it from the **Sidechains** page, or
   `chains-cli createsidechaindeposit 2 <deposit address> <amount>`. The coins appear with the
   next Thunder block.
 - **Withdraw.** `createwithdrawal <Chains address> <amount> ( <fee for Chains miners> )`, or the
-  **Mainchain** page. Withdrawals are paid in bundles that Chains miners vote on (about three
+  **Peg** page. Withdrawals are paid in bundles that Chains miners vote on (about three
   months on the main network, 600 blocks on the test network). A withdrawal not in the bundle
   being voted on can be taken back: `refundwithdrawal <txid> <vout>`.
 - **Merged mining.** Thunder blocks are mined by Chains miners, for a fee in CHN paid by the Chains
@@ -135,8 +141,12 @@ Sidechain, in the wallet: `getdepositaddress`, `createwithdrawal`, `refundwithdr
 
 ## Wallet
 
-The pages: Overview, Send, Receive, Transactions, **Mainchain** (deposits, withdrawals, merged
-mining).
+The pages of `thunder-app`: Overview, Send (with Choose coins), Receive, Transactions, Wallets, Advanced
+transactions; **Peg** (deposits, withdrawals, bundles) and **Merged mining**; and those of Thunder:
+**Batch pay** (many recipients in one transaction, typed, pasted or read from a CSV file, checked, totalled
+and previewed before it is sent), **Payments** (the history of the wallet made for many payments: grouped
+by day, filtered, totalled, exported) and **Throughput** (transactions per block, how full the blocks are
+against 32 million weight units, fees and rates). The Tools page and the node window are the kit's.
 
 ## Credits
 
