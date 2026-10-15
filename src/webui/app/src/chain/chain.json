@@ -1,20 +1,20 @@
 {
   "comment": "The chain of this app, in one place: read by CMake (src/webui/CMakeLists.txt, which makes webui/chainconfig.h for the host) and by the interface (chain/config.ts). A sidechain sets its own here; see doc/webui.md.",
-  "name": "Sidechain",
-  "bin": "sidechain",
+  "name": "Thunder",
+  "bin": "thunder",
   "role": "sidechain",
   "coin": { "ticker": "CHN", "name": "Chains" },
-  "uriScheme": "sidechain",
+  "uriScheme": "thunder",
   "brand": {
-    "color": "#4fa3ff",
-    "iconHue": 150,
-    "mark": ["M4 7.5h14a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H4z", "M24 11h4v10h-4", "M9 16h7"]
+    "color": "#a585ff",
+    "iconHue": 232,
+    "mark": ["M18.5 3.5L8 18h7.5l-2 10.5L24.5 14H17z", "M3.5 11.5h4", "M2.5 16.5h3", "M4.5 21.5h3"]
   },
   "networks": {
-    "main": { "p2p": 9655, "rpc": 9654, "hrp": "sc", "pubkey": 28, "script": 88 },
-    "test": { "p2p": 19655, "rpc": 19654, "hrp": "tsc", "pubkey": 111, "script": 196 },
-    "signet": { "p2p": 39655, "rpc": 39654, "hrp": "tsc", "pubkey": 111, "script": 196 },
-    "regtest": { "p2p": 29655, "rpc": 29654, "hrp": "rsc", "pubkey": 111, "script": 196 }
+    "main": { "p2p": 9755, "rpc": 9754, "hrp": "th", "pubkey": 28, "script": 88 },
+    "test": { "p2p": 19755, "rpc": 19754, "hrp": "tth", "pubkey": 111, "script": 196 },
+    "signet": { "p2p": 39755, "rpc": 39754, "hrp": "tth", "pubkey": 111, "script": 196 },
+    "regtest": { "p2p": 29755, "rpc": 29754, "hrp": "rth", "pubkey": 111, "script": 196 }
   },
   "mainchain": {
     "name": "Chains",
@@ -29,9 +29,9 @@
   },
   "links": {
     "website": "https://blockfab.org/drivechains/",
-    "source": "https://github.com/block-fabric/sidechain-template-app",
-    "issues": "https://github.com/block-fabric/sidechain-template-app/issues",
-    "guide": "https://github.com/block-fabric/sidechain-template-app/blob/main/doc/sidechain.md"
+    "source": "https://github.com/block-fabric/thunder-app",
+    "issues": "https://github.com/block-fabric/thunder-app/issues",
+    "guide": "https://github.com/block-fabric/thunder-app/blob/main/README.md"
   },
   "drop": ["sidechains", "sidechain-nodes", "mine"]
 }
