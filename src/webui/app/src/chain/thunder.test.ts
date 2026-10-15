@@ -42,6 +42,7 @@ import DialogHost from '../components/DialogHost.svelte';
 import { setTransport, type BridgeRequest } from '../lib/bridge';
 import { buildCommands, menuSections } from '../lib/commands.svelte';
 import { dialogs } from '../lib/dialogs.svelte';
+import { BLOCK_WEIGHT } from '../lib/blocks';
 import { bytesToBase64 } from '../lib/files';
 import { AREAS, chainBeforeTools, HOME_QUICK_ACTIONS, NAV_SECTIONS } from '../lib/layout';
 import { go, nav } from '../lib/nav.svelte';
@@ -344,6 +345,11 @@ describe.runIf(CHAIN.name === 'Thunder')('the pages of Thunder', () => {
     expect(CHAIN.uriScheme).toBe('thunder');
     expect([CHAIN.networks.main.hrp, CHAIN.networks.test.hrp, CHAIN.networks.regtest.hrp]).toEqual(['th', 'tth', 'rth']);
     expect(CHAIN.networks.main.p2p).toBe(9755);
+    // The weight of a block, as the chain parameters set it on every network, and as the explorer draws it.
+    expect(CHAIN.blockWeight).toBe(MAX_BLOCK_WEIGHT);
+    expect(BLOCK_WEIGHT).toBe(32_000_000);
+    const params = readFileSync(join(__dirname, '../../../../kernel/chainparams.cpp'), 'utf8');
+    expect(params.match(/consensus\.max_block_weight = 32'000'000;/g)?.length).toBe(4);
   });
 
   it('Batch pay: a pasted list checked, its problems merged and removed, previewed, confirmed and paid in one transaction', async () => {

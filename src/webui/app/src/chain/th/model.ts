@@ -2,14 +2,15 @@
 // the recipients of a batch payment read from a paste or a CSV file, checked, totalled and cut into
 // transactions; the history of the wallet as payments (a batch as one); the throughput of the chain from
 // the statistics of its blocks.
+import { CHAIN } from '../config';
 import { checkAddress, addressTypeOf, networkParams, bech32Decode, base58Decode, NETWORKS } from '../../lib/address';
 import { formatAmount, parseAmount, type Unit } from '../../lib/units';
 import { compareRecords, isoLocal, toCsv, type TxRecord } from '../../lib/wallet';
 
 // --- The chain ---
 
-/** The weight a block of Thunder may have (consensus.max_block_weight on every network): 32 million. */
-export const MAX_BLOCK_WEIGHT = 32_000_000;
+/** The weight a block of Thunder may have (consensus.max_block_weight on every network, chain.json blockWeight): 32 million. */
+export const MAX_BLOCK_WEIGHT = CHAIN.blockWeight ?? 32_000_000;
 /** The weight a standard transaction may have (MAX_STANDARD_TX_WEIGHT): what a node relays and mines. */
 export const MAX_STANDARD_TX_WEIGHT = 392_000;
 /** The recipients of one transaction of a batch: their outputs and the inputs that pay them stay well below a standard transaction. */
