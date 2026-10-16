@@ -17,6 +17,8 @@
   import type { Column } from '../../lib/table';
   import { formatAmount } from '../../lib/units';
   import '../th/th.css';
+  import Term from '../../components/Term.svelte';
+  import { simpleMode } from '../../lib/uimode.svelte';
   import Bars from '../th/Bars.svelte';
   import { blocksToClear, capacityOf, formatRate, formatShare, MAX_BLOCK_WEIGHT, throughputOf, type BlockStat } from '../th/model';
   import { ESTIMATE_TARGETS, refreshBlocks, refreshChain, th, watchMempool } from '../th/store.svelte';
@@ -55,7 +57,9 @@
   const last = $derived(blocks.length ? blocks[blocks.length - 1] : null);
   const mempool = $derived(th.mempool);
 
-  const columns: Column<BlockStat>[] = [
+  // Simple mode (lib/uimode.svelte.ts): how busy the chain is, without outputs, fee rates, hashes or memory.
+  const simple = $derived(simpleMode());
+  const allColumns: Column<BlockStat>[] = [
     { key: 'height', label: 'Height', value: (b) => b.height, width: '5.2rem', align: 'end' },
     { key: 'time', label: 'Time', value: (b) => b.time, width: '8.8rem', noFilter: true },
     { key: 'txs', label: 'Transactions', value: (b) => b.txs, width: '6.8rem', align: 'end', noFilter: true },
@@ -65,6 +69,7 @@
     { key: 'rate', label: 'Fee rate', value: (b) => b.feeRate, width: '6.5rem', align: 'end', noFilter: true },
     { key: 'hash', label: 'Hash', value: (b) => b.hash, width: 'minmax(6rem, 1fr)', mono: true },
   ];
+  const columns = $derived(simple ? allColumns.filter((c) => !['outs', 'rate', 'hash'].includes(c.key)) : allColumns);
 
   function rateText(satPerVb: number | null | undefined): string {
     if (satPerVb === null || satPerVb === undefined || !Number.isFinite(satPerVb)) return '–';
@@ -93,7 +98,7 @@
     label="Throughput"
     tabs={[
       { id: 'blocks', label: 'Blocks' },
-      { id: 'mempool', label: 'Mempool' },
+      { id: 'mempool', label: simple ? 'Waiting to be mined' : 'Mempool' },
     ]}
     current={tab}
     select={(id) => (tab = id as Tab)}
@@ -118,11 +123,11 @@
         <span class="th-v">{formatShare(tp.avgFill)}</span>
         <span class="th-n">{t('at most %1 of 32 M', formatShare(tp.maxFill))}</span>
       </div>
-      <div class="panel th-tile">
+      {#if !simple}<div class="panel th-tile">
         <span class="th-k">Fees</span>
         <span class="th-v">{fees(tp.fees)}</span>
         <span class="th-n">{t('%1 a transaction, median %2', fees(tp.feePerTx), rateText(tp.feeRate))}</span>
-      </div>
+      </div>{/if}
       <div class="panel th-tile">
         <span class="th-k">Between blocks</span>
         <span class="th-v">{tp.interval ? shortDuration(tp.interval) : '–'}</span>
@@ -195,11 +200,11 @@
         <span class="th-v">{mempool ? fees(mempool.total_fee * 1e8) : '–'}</span>
         <span class="th-n">{mempool && mempool.size ? t('%1 a transaction', fees((mempool.total_fee * 1e8) / mempool.size)) : ''}</span>
       </div>
-      <div class="panel th-tile">
+      {#if !simple}<div class="panel th-tile">
         <span class="th-k">Memory</span>
         <span class="th-v">{mempool ? formatBytes(mempool.usage) : '–'}</span>
         <span class="th-n">{node.mempool.max ? t('of %1', formatBytes(node.mempool.max)) : ''}</span>
-      </div>
+      </div>{/if}
     </section>
 
     <div class="cols">
@@ -211,9 +216,9 @@
               <dt>{tn('Within %n block(s)', target)} <span class="faint">({niceTimeOffset(target * spacing)})</span></dt>
               <dd>{rateText(th.estimates[target])}</dd>
             {/each}
-            <dt>Least relayed</dt><dd>{mempool?.mempoolminfee !== undefined ? rateText((mempool.mempoolminfee * 1e8) / 1000) : '–'}</dd>
+            {#if !simple}<dt>Least relayed</dt><dd>{mempool?.mempoolminfee !== undefined ? rateText((mempool.mempoolminfee * 1e8) / 1000) : '–'}</dd>{/if}
           </dl>
-          <p class="th-note">The node estimates from the blocks it saw; – until it has seen enough. With room in every block, the least fee is usually enough.</p>
+          <p class="th-note">The node estimates from the blocks it saw; – until it has seen enough. With room in every block, the least <Term id="fee">fee</Term> is usually enough.</p>
         </div>
       </section>
       <section class="panel" aria-labelledby="tp-chain">

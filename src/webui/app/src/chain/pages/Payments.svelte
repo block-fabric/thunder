@@ -22,6 +22,7 @@
   import { statusText, walletApi, type TxRecord } from '../../lib/wallet';
   import { current, refreshRecords } from '../../lib/walletdata.svelte';
   import '../th/th.css';
+  import { simpleMode } from '../../lib/uimode.svelte';
   import Bars from '../th/Bars.svelte';
   import { dailyTotals, dayOf, newRecipient, paymentsCsv, paymentsOf, type Payment } from '../th/model';
   import { draft } from '../th/store.svelte';
@@ -111,7 +112,10 @@
   });
 
   const KIND_WORDS = { in: 'Received', out: 'Sent', batch: 'Batch', mined: 'Mined', other: 'Other' } as const;
-  const columns: Column<Payment>[] = [
+  // Simple mode (lib/uimode.svelte.ts): batch payments are Advanced's; the payments in plain words, without
+  // the count of recipients, the batches tab, the export by recipient or the id of the transaction.
+  const simple = $derived(simpleMode());
+  const allColumns: Column<Payment>[] = [
     { key: 'time', label: 'Date', value: (p) => p.time, width: '8.8rem', noFilter: true },
     { key: 'kind', label: 'Kind', value: (p) => t(KIND_WORDS[p.kind]), width: '7rem', words: true },
     { key: 'who', label: 'To or from', value: (p) => `${p.label} ${p.address}`, width: 'minmax(6rem, 2fr)' },
@@ -119,6 +123,7 @@
     { key: 'amount', label: 'Amount', value: (p) => p.amount, width: 'minmax(8rem, 1fr)', align: 'end', noFilter: true },
     { key: 'status', label: 'Status', value: (p) => statusText(p), width: 'minmax(6rem, 1fr)', words: true, noFilter: true },
   ];
+  const columns = $derived(simple ? allColumns.filter((c) => c.key !== 'count') : allColumns);
   // The id is searched too, without a column of its own.
   const searchable = $derived(search.trim() ? shown.filter((p) => p.txid.startsWith(search.trim().toLowerCase())) : []);
   const rows = $derived(searchable.length ? searchable : shown);
@@ -188,12 +193,14 @@
         <p class="th-sub">Every transaction once: a batch is one row, whatever it paid.</p>
       </div>
       <div class="th-tools">
-        <label class="check small" title="In the file, a line for each recipient of a batch">
-          <input type="checkbox" bind:checked={perRecipient} />
-          <span>A line per recipient</span>
-        </label>
+        {#if !simple}
+          <label class="check small" title="In the file, a line for each recipient of a batch">
+            <input type="checkbox" bind:checked={perRecipient} />
+            <span>A line per recipient</span>
+          </label>
+        {/if}
         <button type="button" class="btn small" disabled={!rows.length} onclick={exportCsv}><Icon name="download" size={15} /> Export CSV…</button>
-        <button type="button" class="btn primary small" onclick={() => go('batchpay')}><Icon name="batch" size={15} /> Batch pay</button>
+        {#if !simple}<button type="button" class="btn primary small" onclick={() => go('batchpay')}><Icon name="batch" size={15} /> Batch pay</button>{/if}
       </div>
     </header>
 
@@ -201,7 +208,7 @@
       label="Payments"
       tabs={[
         { id: 'all', label: 'All payments' },
-        { id: 'batches', label: 'Batches' },
+        ...(simple && tab !== 'batches' ? [] : [{ id: 'batches', label: 'Batches' }]),
         { id: 'days', label: 'By day' },
       ]}
       current={tab}
@@ -215,7 +222,7 @@
       <div class="panel th-tile"><span class="th-k">Received</span><span class="th-v th-up"><Amount sats={totals.received} /></span><span class="th-n">{tn('%n payment(s)', totals.countIn)}</span></div>
       <div class="panel th-tile"><span class="th-k">Sent</span><span class="th-v th-down"><Amount sats={-totals.sent} /></span><span class="th-n">{tn('%n payment(s)', totals.countOut)}</span></div>
       <div class="panel th-tile"><span class="th-k">Net</span><span class="th-v"><Amount sats={totals.received + totals.sent} plus /></span><span class="th-n">{period === 'all' ? t('since the wallet began') : tn('the last %n day(s)', Number(period))}</span></div>
-      <div class="panel th-tile"><span class="th-k">Batches</span><span class="th-v num">{totals.batches}</span><span class="th-n">{tn('%n recipient(s) paid in them', totals.recipients)}</span></div>
+      {#if !simple}<div class="panel th-tile"><span class="th-k">Batches</span><span class="th-v num">{totals.batches}</span><span class="th-n">{tn('%n recipient(s) paid in them', totals.recipients)}</span></div>{/if}
     </section>
 
     <section class="panel activity" aria-labelledby="pm-activity">
@@ -294,9 +301,9 @@
         <section class="panel chosen" aria-labelledby="pm-chosen">
           <div class="panel-head list-head">
             <h2 id="pm-chosen">{chosen.kind === 'batch' ? tn('Batch of %n recipient(s)', chosen.count) : t(KIND_WORDS[chosen.kind])}</h2>
-            <span class="mono faint small break" translate="no">{chosen.txid}</span>
+            {#if !simple}<span class="mono faint small break" translate="no">{chosen.txid}</span>{/if}
             <span class="grow"></span>
-            {#if chosen.kind === 'batch' || chosen.kind === 'out'}<button type="button" class="btn small" onclick={() => void payAgain(chosen!)}><Icon name="batch" size={15} /> Pay again…</button>{/if}
+            {#if !simple && (chosen.kind === 'batch' || chosen.kind === 'out')}<button type="button" class="btn small" onclick={() => void payAgain(chosen!)}><Icon name="batch" size={15} /> Pay again…</button>{/if}
             <button type="button" class="btn ghost small" onclick={() => (details = chosen!.records[0])}>Details…</button>
             <button type="button" class="btn ghost small" onclick={() => go('explorer', `search:${chosen!.txid}`)}>Show in block explorer</button>
           </div>

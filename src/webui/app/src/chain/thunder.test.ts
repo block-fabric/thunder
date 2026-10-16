@@ -566,3 +566,52 @@ describe('the RPC methods of the pages of Thunder, against the policy the host s
     expect(local.slice(local.indexOf('KeyedRpcMethods()')).match(/return \{\};/)).not.toBeNull();
   });
 });
+
+// Simple mode (lib/uimode.svelte.ts, user decision 2026-10-16): Batch pay is Advanced's; Payments and
+// Throughput stay, without their technical columns; the calls are those of Advanced.
+describe('Simple mode on Thunder', () => {
+  beforeEach(() => {
+    prefs.uiMode = 'simple';
+  });
+
+  it('Batch pay leaves the navigation, reached still by the palette', async () => {
+    const { pageShown } = await import('../lib/uimode.svelte');
+    expect(pageShown('batchpay' as never)).toBe(false);
+    expect(pageShown('payments' as never)).toBe(true);
+    expect(pageShown('throughput' as never)).toBe(true);
+    expect(buildCommands().some((c) => c.id === 'page.batchpay')).toBe(true);
+    prefs.uiMode = 'advanced';
+    expect(pageShown('batchpay' as never)).toBe(true);
+  });
+
+  it('Payments: no batches tab, no recipients column, no Batch pay; the same history', async () => {
+    render(Payments);
+    const grid = await waitFor(() => screen.getByRole('grid', { name: 'Payments of the wallet' }));
+    await waitFor(() => expect(within(grid).getAllByRole('row').length).toBe(4));
+    expect(screen.queryByRole('tab', { name: 'Batches' })).toBeNull();
+    expect(within(grid).queryByRole('columnheader', { name: /Recipients/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Batch pay/ })).toBeNull();
+    expect(screen.getByRole('region', { name: 'Totals of the payments shown' }).textContent).toContain('9.00000000');
+    prefs.uiMode = 'advanced';
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Batches' })).toBeTruthy());
+  });
+
+  it('Throughput: no outputs, fee rates nor hashes; the same calls', async () => {
+    render(Throughput);
+    await waitFor(() => expect(th.blocks.length).toBe(20));
+    expect(called('getblockstats').length).toBe(20);
+    const grid = screen.getByRole('grid', { name: 'The latest blocks' });
+    expect(within(grid).queryByRole('columnheader', { name: /Hash/ })).toBeNull();
+    expect(within(grid).queryByRole('columnheader', { name: /Outputs/ })).toBeNull();
+    await fireEvent.click(screen.getByRole('tab', { name: 'Waiting to be mined' }));
+    await waitFor(() => expect(screen.getByRole('region', { name: 'The mempool' }).textContent).toContain('120'));
+    expect(screen.queryByText('Least relayed')).toBeNull();
+  });
+
+  it('the payments card sends, not batch pays', async () => {
+    render(LocalCards);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Payments today' })).toBeTruthy());
+    expect(screen.queryByRole('button', { name: /Batch pay/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Send/ })).toBeTruthy();
+  });
+});

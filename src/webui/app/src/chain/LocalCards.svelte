@@ -3,6 +3,8 @@
   // over the last blocks, the last block and how full it is, what waits in the mempool, the transactions of
   // each block as a line), and the payments of the wallet today (in, out, the last batch). Each opens its page.
   import Amount from '../components/Amount.svelte';
+  import { simpleMode } from '../lib/uimode.svelte';
+  import { openQuick } from '../lib/quick.svelte';
   import Icon from '../components/Icon.svelte';
   import Meter from '../components/Meter.svelte';
   import Sparkline from '../components/Sparkline.svelte';
@@ -50,6 +52,7 @@
     return { received, sent, count };
   });
   const lastBatch = $derived(payments.find((p) => p.kind === 'batch') ?? null);
+  const simple = $derived(simpleMode());
 </script>
 
 <div class="th-cards">
@@ -63,7 +66,7 @@
     {#if blocks.length > 1}<div class="spark"><Sparkline values={blocks.map((b) => b.txs)} width={220} height={30} /></div>{/if}
     {#snippet actions()}
       <button type="button" class="btn grow" onclick={() => go('throughput')}><Icon name="gauge" size={15} /> Blocks</button>
-      <button type="button" class="btn ghost" onclick={() => go('throughput', 'mempool')}>Mempool</button>
+      <button type="button" class="btn ghost" onclick={() => go('throughput', 'mempool')}>{simple ? 'Waiting' : 'Mempool'}</button>
     {/snippet}
   </Card>
 
@@ -73,13 +76,17 @@
       <dl class="pairs">
         <dt>Received</dt><dd><Amount sats={today.received} /></dd>
         <dt>Sent</dt><dd><Amount sats={-today.sent} /></dd>
-        <dt>Last batch</dt><dd>{#if lastBatch}{tn('%n recipient(s)', lastBatch.count)}, {t('%1 ago', niceTimeOffset(Date.now() / 1000 - lastBatch.time))}{:else}–{/if}</dd>
+        {#if !simple}<dt>Last batch</dt><dd>{#if lastBatch}{tn('%n recipient(s)', lastBatch.count)}, {t('%1 ago', niceTimeOffset(Date.now() / 1000 - lastBatch.time))}{:else}–{/if}</dd>{/if}
       </dl>
     {:else}
       <p class="muted">Open a wallet to see its payments.</p>
     {/if}
     {#snippet actions()}
-      <button type="button" class="btn grow primary" onclick={() => go('batchpay')}><Icon name="batch" size={15} /> Batch pay</button>
+      {#if simple}
+        <button type="button" class="btn grow primary" onclick={() => openQuick('send')}><Icon name="send" size={15} /> Send</button>
+      {:else}
+        <button type="button" class="btn grow primary" onclick={() => go('batchpay')}><Icon name="batch" size={15} /> Batch pay</button>
+      {/if}
       <button type="button" class="btn ghost" onclick={() => go('payments')}>History</button>
     {/snippet}
   </Card>
