@@ -190,7 +190,7 @@
     <header class="th-head">
       <div>
         <h1>Payments</h1>
-        <p class="th-sub">Every transaction once: a batch is one row, whatever it paid.</p>
+        <p class="th-sub">{simple ? t('Every payment of the wallet, in and out, and the totals of each day.') : t('Every transaction once: a batch is one row, whatever it paid.')}</p>
       </div>
       <div class="th-tools">
         {#if !simple}

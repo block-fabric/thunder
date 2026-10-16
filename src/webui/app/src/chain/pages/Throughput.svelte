@@ -82,7 +82,7 @@
   <header class="th-head">
     <div>
       <h1>Throughput</h1>
-      <p class="th-sub">{t('Blocks of up to %1 million weight units: what the chain carries, and what it could.', MAX_BLOCK_WEIGHT / 1_000_000)}</p>
+      <p class="th-sub">{simple ? t('How busy Thunder is: the payments of each block, and how much room is left.') : t('Blocks of up to %1 million weight units: what the chain carries, and what it could.', MAX_BLOCK_WEIGHT / 1_000_000)}</p>
     </div>
     <div class="th-tools">
       <div class="th-chips" role="group" aria-label="Blocks counted">
