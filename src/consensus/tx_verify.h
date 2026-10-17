@@ -28,6 +28,15 @@ namespace Consensus {
  * Preconditions: tx.IsCoinBase() is false.
  */
 [[nodiscard]] bool CheckTxInputs(const CTransaction& tx, TxValidationState& state, const CCoinsViewCache& inputs, int nSpendHeight, CAmount& txfee, int coinbase_maturity = COINBASE_MATURITY);
+
+/**
+ * Thunder: whether the non-witness signature operations a transaction executes stay within
+ * MAX_TX_LEGACY_SIGOPS_CONSENSUS, counted as BIP54 counts them (the scriptSigs, and the spent
+ * scriptPubKeys with their P2SH redeem scripts). A consensus rule from
+ * Consensus::Params::legacy_sigops_limit_height; before it, the same limit is relay policy only
+ * (MAX_TX_LEGACY_SIGOPS). Preconditions: tx.IsCoinBase() is false, its inputs are in `inputs`.
+ */
+[[nodiscard]] bool CheckTxLegacySigops(const CTransaction& tx, const CCoinsViewCache& inputs);
 } // namespace Consensus
 
 /** Auxiliary functions for transaction validation (ideally should not be exposed) */

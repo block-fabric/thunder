@@ -131,6 +131,35 @@ How deposits, withdrawals, bundles and merged mining work: [doc/sidechain.md](do
 Payments: Thunder is the template with large blocks and nothing else, so it is the place for
 many transactions at low fees. Everything a Bitcoin Core wallet does, it does.
 
+## Limits
+
+| | Thunder | Bitcoin |
+|---|---|---|
+| Block weight | 32,000,000 (31,000,000 for its transactions, the rest for the coinbase) | 4,000,000 |
+| Signature operations per block | 640,000 | 80,000 |
+| Stripped size of a transaction | 1,000,000 bytes (consensus); 400,000 weight units to be relayed | the same |
+| Mempool cluster | 2,000 kvB (so `-maxmempool` must be at least 80 MB) | 101 kvB |
+
+- **Compact blocks** number their transactions in 16 bits: a block of more than 65,535 transactions
+  is relayed whole, or announced by its header.
+- **Clusters:** a wallet with few confirmed coins pays a long list (Batch pay) in transactions of up to
+  1,500 outputs, each spending the change of the one before. At 46.6 kvB (P2WPKH) or 64.6 kvB (P2TR) each,
+  24 of them, the longest chain a wallet builds (`-limitancestorcount`), fit in a cluster; a longer list
+  waits for a block.
+- **Legacy signature operations:** signature hashing of legacy (non-witness) inputs is quadratic in the
+  size of a transaction, and a Thunder block can take eight 1 MB transactions: some eight times Bitcoin's
+  worst case. A transaction that runs more than 2,500 of them (BIP54's count: the scriptSigs, and the
+  spent scriptPubKeys with their P2SH scripts) is not relayed. A block producer could still put one in
+  a block; `legacy_sigops_limit_height` makes the limit a network rule (a soft fork). It is never on
+  Thunder's networks until set: `LEGACY_SIGOPS_ACTIVATION_HEIGHT_PLACEHOLDER` in
+  `src/kernel/chainparams.cpp`, to be replaced by a height that every block producer has upgraded
+  before. (Regtest: `-testactivationheight=legacysigops@<height>`.)
+- **Base58 addresses** (P2PKH and P2SH) have the same prefixes as on the Chains mainchain, as on every
+  sidechain of the template: an old-style address of the mainchain is also valid on Thunder, and pays
+  there. Only bech32 addresses (`th1…`, `tth1…`) tell the chains apart. Pay to bech32 addresses;
+  thunder-app's Batch pay warns about base58 rows. (Prefixes of their own for the main network are a
+  decision for the template, before its launch.)
+
 ## Commands
 
 The commands of Bitcoin Core, and those of every sidechain:

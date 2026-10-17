@@ -2307,10 +2307,11 @@ void PeerManagerImpl::BlockDisconnected(const std::shared_ptr<const CBlock> &blo
  * to compatible peers.
  */
 /**
- * Compact blocks number the transactions they leave out in 16 bits: a block with more transactions
- * (one of a chain with larger blocks) goes as a whole block, or is announced by its header.
+ * Compact blocks number their transactions in 16 bits: a receiver refuses one of more than 65,535
+ * (CBlockHeaderAndShortTxIDs, "indexes overflowed 16 bits"). A block with more transactions (one of a
+ * chain with larger blocks) goes as a whole block, or is announced by its header.
  */
-static constexpr size_t MAX_COMPACT_BLOCK_TXS{0x10000};
+static constexpr size_t MAX_COMPACT_BLOCK_TXS{std::numeric_limits<uint16_t>::max()};
 
 void PeerManagerImpl::NewPoWValidBlock(const CBlockIndex *pindex, const std::shared_ptr<const CBlock>& pblock)
 {

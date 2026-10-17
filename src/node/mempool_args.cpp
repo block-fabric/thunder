@@ -105,6 +105,10 @@ util::Result<void> ApplyArgsManOptions(const ArgsManager& argsman, const CChainP
 
     mempool_opts.persist_v1_dat = argsman.GetBoolArg("-persistmempoolv1", mempool_opts.persist_v1_dat);
 
+    // Thunder: larger clusters on its networks (a sidechain; plain regtest keeps Bitcoin's limits).
+    if (chainparams.GetConsensus().sidechain.enabled) {
+        mempool_opts.limits.cluster_size_vbytes = int64_t{THUNDER_CLUSTER_SIZE_LIMIT_KVB} * 1'000;
+    }
     ApplyArgsManOptions(argsman, mempool_opts.limits);
 
     if (mempool_opts.limits.cluster_count > MAX_CLUSTER_COUNT_LIMIT) {

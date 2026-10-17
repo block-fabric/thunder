@@ -218,3 +218,17 @@ bool Consensus::CheckTxInputs(const CTransaction& tx, TxValidationState& state, 
     txfee = txfee_aux;
     return true;
 }
+
+bool Consensus::CheckTxLegacySigops(const CTransaction& tx, const CCoinsViewCache& inputs)
+{
+    Assert(!tx.IsCoinBase());
+    unsigned int sigops{0};
+    for (const auto& txin : tx.vin) {
+        // As BIP54 (and policy/policy.cpp, CheckSigopsBIP54): the sigops of the spent scriptPubKey
+        // count where they run, at the spend, and a CHECKMULTISIG of 16 keys or fewer counts its keys.
+        sigops += txin.scriptSig.GetSigOpCount(/*fAccurate=*/true);
+        sigops += inputs.AccessCoin(txin.prevout).out.scriptPubKey.GetSigOpCount(txin.scriptSig);
+        if (sigops > MAX_TX_LEGACY_SIGOPS_CONSENSUS) return false;
+    }
+    return true;
+}

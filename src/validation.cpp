@@ -1059,6 +1059,13 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
         }
     }
 
+    // Thunder: what a block from the next height may not take, the mempool does not take either,
+    // non-standard transactions accepted or not.
+    if (m_active_chainstate.m_chain.Height() + 1 >= m_active_chainstate.m_chainman.GetConsensus().legacy_sigops_limit_height &&
+        !Consensus::CheckTxLegacySigops(tx, m_view)) {
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-legacy-sigops", "non-witness sigops exceed the bip54 limit");
+    }
+
     if (m_pool.m_opts.require_standard) {
         state = ValidateInputsStandardness(tx, m_view);
         if (state.IsInvalid()) {
@@ -2767,6 +2774,12 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
                 state.Invalid(BlockValidationResult::BLOCK_CONSENSUS,
                               tx_state.GetRejectReason(),
                               tx_state.GetDebugMessage() + " in transaction " + tx.GetHash().ToString());
+                break;
+            }
+            // Thunder: BIP54's limit of legacy signature operations, a network rule from its height.
+            if (pindex->nHeight >= params.GetConsensus().legacy_sigops_limit_height && !Consensus::CheckTxLegacySigops(tx, view)) {
+                state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-txns-legacy-sigops",
+                              "non-witness sigops exceed the bip54 limit in transaction " + tx.GetHash().ToString());
                 break;
             }
             nFees += txfee;

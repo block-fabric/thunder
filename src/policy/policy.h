@@ -72,6 +72,19 @@ inline constexpr unsigned int DEFAULT_MIN_RELAY_TX_FEE{100};
 inline constexpr unsigned int DEFAULT_CLUSTER_LIMIT{64};
 /** Maximum size of cluster in virtual kilobytes */
 inline constexpr unsigned int DEFAULT_CLUSTER_SIZE_LIMIT_KVB{101};
+/**
+ * Thunder: the maximum size of a cluster in virtual kilobytes on its networks (where the chain is a
+ * sidechain; plain regtest keeps Bitcoin's DEFAULT_CLUSTER_SIZE_LIMIT_KVB), twenty times Bitcoin's.
+ * A wallet with few confirmed coins pays a long list (Batch pay) in transactions of up to 1,500
+ * outputs, each spending the change of the one before: some 46.6 kvB each to P2WPKH outputs, 64.6 kvB
+ * to P2TR ones. Bitcoin's limit stopped such a list at its second or third transaction; at this one,
+ * 24 of them (the longest chain -limitancestorcount lets a wallet build) take at most 1,550 kvB.
+ * The mempool then needs at least 40 times as much (80 MB, see -maxmempool).
+ */
+inline constexpr unsigned int THUNDER_CLUSTER_SIZE_LIMIT_KVB{2'000};
+// The largest chunk a mempool of Thunder's limits holds is a third of the weight the transactions of
+// a Thunder block take (31,000,000 weight units), so it always fits a block.
+static_assert(THUNDER_CLUSTER_SIZE_LIMIT_KVB * 1000 * WITNESS_SCALE_FACTOR <= 31'000'000 / 3);
 /** Default for -limitancestorcount, max number of in-mempool ancestors */
 inline constexpr unsigned int DEFAULT_ANCESTOR_LIMIT{25};
 /** Default for -limitdescendantcount, max number of in-mempool descendants */
