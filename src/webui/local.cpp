@@ -30,8 +30,15 @@ std::set<std::string> KeyedRpcMethods()
     return {};
 }
 
-void RegisterHost(Bridge& bridge, NodeFn node, guard::ConfirmFn confirm)
+std::map<std::string, confirm::Method> ConfirmedRpcMethods()
 {
+    // None: what the pages of Thunder pay goes through the wallet functions of the kit, confirmed by the host (audit 7 #1).
+    return {};
+}
+
+void RegisterHost(Bridge& bridge, NodeFn node, guard::ConfirmFn confirm, confirm::KeysFn keys)
+{
+    (void)keys;
     (void)bridge;
     (void)node;
     (void)confirm;

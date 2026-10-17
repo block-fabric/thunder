@@ -51,6 +51,8 @@
   const rows = (name) => $$('[role="row"]', grid(name) || document.createElement('div')).slice(1);
 
   try {
+    // What pays or signs is confirmed in the dialog of the host (audit 7 #1): every question accepted here.
+    await host('test.confirmAnswer', { always: true });
     await waitFor('the node to run', () => T() && T().app.phase === 'ready' && T().node.tip, 120000);
     await waitFor('the node to reach the mainchain', async () => (await rpc('getmainchaininfo')).connected, 60000);
     await check('Thunder, the dashboard and Midnight by default', T().app.info.name === 'Thunder' && T().prefs.layout === 'dashboard' && (T().prefs.theme ?? 'midnight') === 'midnight', `${T().app.info.name} ${T().prefs.layout}`);
