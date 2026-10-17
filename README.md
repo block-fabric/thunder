@@ -150,10 +150,11 @@ many transactions at low fees. Everything a Bitcoin Core wallet does, it does.
   size of a transaction, and a Thunder block can take eight 1 MB transactions: some eight times Bitcoin's
   worst case. A transaction that runs more than 2,500 of them (BIP54's count: the scriptSigs, and the
   spent scriptPubKeys with their P2SH scripts) is not relayed. A block producer could still put one in
-  a block; `legacy_sigops_limit_height` makes the limit a network rule (a soft fork). It is never on
-  Thunder's networks until set: `LEGACY_SIGOPS_ACTIVATION_HEIGHT_PLACEHOLDER` in
-  `src/kernel/chainparams.cpp`, to be replaced by a height that every block producer has upgraded
-  before. (Regtest: `-testactivationheight=legacysigops@<height>`.)
+  a block; `legacy_sigops_limit_height` makes the limit a network rule (a soft fork). The test network
+  (reset on 17/Oct/2026) has it from its first block; on the main network and signet it is never on
+  until set: `LEGACY_SIGOPS_ACTIVATION_HEIGHT_PLACEHOLDER` in `src/kernel/chainparams.cpp`, to be
+  replaced by a height that every block producer has upgraded before. (Regtest:
+  `-testactivationheight=legacysigops@<height>`.)
 - **Base58 addresses** (P2PKH and P2SH) have the same prefixes as on the Chains mainchain, as on every
   sidechain of the template: an old-style address of the mainchain is also valid on Thunder, and pays
   there. Only bech32 addresses (`th1…`, `tth1…`) tell the chains apart. Pay to bech32 addresses;

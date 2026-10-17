@@ -18,6 +18,7 @@
 #include <hash.h>
 #include <httpserver.h>
 #include <kernel/chainparams.h>
+#include <kernel/testnet_activation.h>
 #include <merkleblock.h>
 #include <node/miner.h>
 #include <node/mining_types.h>
@@ -201,7 +202,7 @@ BOOST_AUTO_TEST_CASE(chain_params)
     side_opts.sidechain_slot = THUNDER_SLOT;
     std::vector<Expected> chains;
     chains.push_back({ChainType::MAIN, CChainParams::Main(), 9755, 9754, 0x01, "th", 0});
-    chains.push_back({ChainType::TESTNET, CChainParams::TestNet(), 19755, 19754, 0x02, "tth", 670});
+    chains.push_back({ChainType::TESTNET, CChainParams::TestNet(), 19755, 19754, 0x02, "tth", TESTNET_MAIN_ACTIVATION_HEIGHT});
     chains.push_back({ChainType::SIGNET, CChainParams::SigNet(), 39755, 39754, 0x03, "tth", 0});
     chains.push_back({ChainType::REGTEST, CChainParams::RegTest(side_opts), 29755, 29754, 0x04, "rth", 0});
     for (const auto& [chain, params, port, rpc_port, magic, hrp, activation_height] : chains) {
@@ -225,9 +226,10 @@ BOOST_AUTO_TEST_CASE(chain_params)
         const MessageStartChars expected_magic{0x74, 0x68, 0x75, magic};
         BOOST_CHECK(params->MessageStart() == expected_magic);
         BOOST_CHECK_EQUAL(params->Bech32HRP(), hrp);
-        // The limit of legacy signature operations per transaction is not a network rule yet
-        // (LEGACY_SIGOPS_ACTIVATION_HEIGHT_PLACEHOLDER): relay policy only.
-        BOOST_CHECK_EQUAL(consensus.legacy_sigops_limit_height, std::numeric_limits<int>::max());
+        // The limit of legacy signature operations per transaction: a network rule from the first block
+        // of the test network (reset on 17/Oct/2026); not yet on the main network and signet
+        // (LEGACY_SIGOPS_ACTIVATION_HEIGHT_PLACEHOLDER), relay policy only there (and on regtest unless set).
+        BOOST_CHECK_EQUAL(consensus.legacy_sigops_limit_height, chain == ChainType::TESTNET ? 0 : std::numeric_limits<int>::max());
     }
     // Set on regtest by -testactivationheight=legacysigops@<height>.
     side_opts.dep_opts.legacy_sigops_height = 5;
