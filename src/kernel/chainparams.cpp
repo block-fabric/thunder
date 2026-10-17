@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <kernel/chainparams.h>
+#include <kernel/testnet_activation.h>
 
 #include <arith_uint256.h>
 
@@ -115,9 +116,10 @@ void CChainParams::MakeSidechain(const SidechainIdentity& identity)
 
 /**
  * Thunder: PLACEHOLDER for the height from which the BIP54 limit of legacy signature operations per
- * transaction (MAX_TX_LEGACY_SIGOPS_CONSENSUS) is a consensus rule on the main, test and signet
- * networks. Never until set: a network upgrade (soft fork) that every block producer has to run
- * first. Until then the limit is relay policy (MAX_TX_LEGACY_SIGOPS). See README.md (Limits).
+ * transaction (MAX_TX_LEGACY_SIGOPS_CONSENSUS) is a consensus rule on the main network and signet.
+ * Never until set: a network upgrade (soft fork) that every block producer has to run first. Until
+ * then the limit is relay policy (MAX_TX_LEGACY_SIGOPS). See README.md (Limits). The test network,
+ * reset on 17/Oct/2026, has it from its first block.
  */
 static constexpr int LEGACY_SIGOPS_ACTIVATION_HEIGHT_PLACEHOLDER{std::numeric_limits<int>::max()};
 
@@ -356,7 +358,7 @@ public:
         };
 
         // Thunder on the Chains testnet, in slot 2.
-        MakeSidechain({.slot = 2, .genesis_message = "Thunder testnet", .genesis_time = 1791513177,
+        MakeSidechain({.slot = 2, .genesis_message = "Thunder testnet 17/Oct/2026: a fresh start", .genesis_time = 1792210200,
                        .message_start = {0x74, 0x68, 0x75, 0x02}, .default_port = 19755, .bech32_hrp = "tth"});
         // The mainchain of the test network votes on a withdrawal bundle within 600 blocks.
         consensus.sidechain.bundle_retry_delay = 20;
@@ -364,9 +366,9 @@ public:
         consensus.max_block_tx_weight = 31'000'000;
         // Signature operations scale with the blocks: eight times Bitcoin's.
         consensus.max_block_sigops_cost = 640'000;
-        consensus.legacy_sigops_limit_height = LEGACY_SIGOPS_ACTIVATION_HEIGHT_PLACEHOLDER;
+        consensus.legacy_sigops_limit_height = 0; // a network rule from the first block of the reset test network
         // The height of the mainchain block that activated the slot; nothing is left out at 0.
-        consensus.sidechain.main_activation_height = 670; // the block that activated the slot on the restarted test network
+        consensus.sidechain.main_activation_height = TESTNET_MAIN_ACTIVATION_HEIGHT; // set once slot 2 activates on the reset test network (kernel/testnet_activation.h)
         // A tenth of the testnet mainchain's withdrawal_min_score (300); proposals within an hour.
         consensus.sidechain.pending_min_score = 30;
         consensus.sidechain.unproposed_expiry_blocks = 60;
