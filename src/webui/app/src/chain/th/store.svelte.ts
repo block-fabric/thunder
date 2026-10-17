@@ -190,3 +190,28 @@ export function resetDraft(): void {
   draft.source = '';
   draft.sourceFile = '';
 }
+
+// --- The batch being paid ---
+
+/**
+ * A batch payment on its way (audit 7 E-TH1): kept here, not in the page, so that it outlives the page. The
+ * page is unmade when the user goes to another one, while its payment goes on; a page made again sees the
+ * payment running, and its Pay button stays off until it ends. Each transaction's recipients leave the
+ * list as soon as it is sent, so that what stays in the list was not paid.
+ */
+class BatchRun {
+  busy = $state(false);
+  progress = $state<{ part: number; parts: number; paid: number; waiting?: boolean } | null>(null);
+  done = $state<{ txids: string[]; count: number; amount: bigint; psbt: boolean; left?: number; error?: string } | null>(null);
+  /** The user asked to stop after the transaction being sent (or while waiting for a block). */
+  stop = $state(false);
+}
+
+export const batchRun = new BatchRun();
+
+export function resetBatchRun(): void {
+  batchRun.busy = false;
+  batchRun.progress = null;
+  batchRun.done = null;
+  batchRun.stop = false;
+}

@@ -6,7 +6,8 @@
   // list totalled, its size and fee estimated, and the transactions previewed and confirmed before they
   // are sent. Up to PART_SIZE recipients go in one transaction; a longer list is paid in several, one
   // after the other, each made, signed and sent by the wallet of the host (wallet.send.*). The list stays
-  // while the user goes to other pages (store.svelte.ts: draft).
+  // while the user goes to other pages (store.svelte.ts: draft), and so does a payment on its way
+  // (batchRun): a page made again while it runs cannot pay the same list a second time (audit 7 E-TH1).
   import { untrack } from 'svelte';
   import Amount from '../../components/Amount.svelte';
   import AmountInput from '../../components/AmountInput.svelte';
@@ -30,8 +31,8 @@
   import { CONF_TARGETS, nearestConfTarget, psbtFileName, walletApi, type Outpoint, type Prepared } from '../../lib/wallet';
   import { current, refreshInfo } from '../../lib/walletdata.svelte';
   import '../th/th.css';
-  import { amountColumnRem, textOfFile, checkRecipients, feeOverEstimate, MAX_BLOCK_WEIGHT, MAX_CSV_BYTES, MAX_RECIPIENTS, mergeDuplicates, newRecipient, PART_SIZE, parseRecipients, partFees, partsOf, recipientsCsv, totalsOf, formatShare, type Recipient } from '../th/model';
-  import { draft } from '../th/store.svelte';
+  import { amountColumnRem, textOfFile, checkRecipients, CHAINED_PARTS, feeOverEstimate, MAX_BLOCK_WEIGHT, MAX_CSV_BYTES, MAX_RECIPIENTS, mergeDuplicates, newRecipient, PART_SIZE, parseRecipients, partFees, partsOf, recipientsCsv, totalsOf, formatShare, type Recipient } from '../th/model';
+  import { batchRun, draft } from '../th/store.svelte';
 
   /** Seconds before the send button of the confirmation can be pressed (SEND_CONFIRM_DELAY). */
   const SEND_CONFIRM_DELAY = 3;
@@ -55,9 +56,10 @@
   let search = $state('');
   let selected: string | null = $state(null);
   let checking = $state(false);
-  let busy = $state(false);
-  let progress = $state<{ part: number; parts: number; paid: number } | null>(null);
-  let done = $state<{ txids: string[]; count: number; amount: bigint; psbt: boolean } | null>(null);
+  // A payment on its way outlives the page (audit 7 E-TH1): its state is the store's.
+  const busy = $derived(batchRun.busy);
+  const progress = $derived(batchRun.progress);
+  const done = $derived(batchRun.done);
   let smart = $state<{ feePerK: number; fallback: boolean; target?: number; requiredFeePerK: number } | null>(null);
   let customFee: bigint | null = $state(BigInt(prefs.customFee || 0));
   let selectedCoins: Outpoint[] = $state([]);
@@ -139,7 +141,9 @@
     checkRun = (async () => {
       try {
         const checked = await checkRecipients(list, network);
-        if (mine === checkSeq) draft.list = checked;
+        // Rows that left the list meanwhile (paid by a payment on its way) stay out of it.
+        const still = new Set(draft.list.map((r) => r.id));
+        if (mine === checkSeq) draft.list = checked.filter((r) => still.has(r.id));
       } finally {
         if (mine === checkSeq) checking = false;
       }
@@ -191,12 +195,22 @@
 
   async function readPaste(e: Event) {
     e.preventDefault();
+    if (batchRun.busy) return;
     const parsed = parseRecipients(pasteText, unit, unitInfo(unit).short);
     pasteOpen = false;
     await takeParsed(parsed, pasteMode === 'replace', 'Pasted', '');
   }
 
   async function takeParsed(parsed: ReturnType<typeof parseRecipients>, replace: boolean, source: string, file: string) {
+    if (batchRun.busy) return;
+    // A header naming a unit this app does not know: its amounts are not read (audit 7 E-TH4).
+    if (parsed.headerUnit === '?') {
+      await inform(t('Batch pay'), t('The list names the unit of its amounts, and it is not one of %1. Its amounts were not read: write them in %2, mCHN, bits or sat, and name it in the header, e.g. "Amount (%2)".', CHAIN.name, unitInfo('CHN').short), 'warning');
+    } else if (parsed.headerUnit && parsed.headerUnit !== unit) {
+      toast('info', t('Batch pay'), t('The amounts of the list were read in %1, the unit its header names.', unitInfo(parsed.headerUnit).short));
+    }
+    const room = replace ? MAX_RECIPIENTS : MAX_RECIPIENTS - draft.list.length;
+    const cut = parsed.truncated || parsed.recipients.length > room;
     const list = replace ? parsed.recipients : [...draft.list, ...parsed.recipients].slice(0, MAX_RECIPIENTS);
     draft.skipped = parsed.skipped;
     draft.source = source;
@@ -211,10 +225,12 @@
         .filter(Boolean)
         .join(' · '),
     );
+    if (cut) await inform(t('Batch pay'), t('A list takes at most %1 recipients: those past it were left out. Pay this list, then the rest.', MAX_RECIPIENTS), 'warning');
     if (problems) show = 'problems';
   }
 
   async function importFile() {
+    if (batchRun.busy) return;
     // The file chooser of the desktop: the page reads only the file the user chose there.
     const path = await chooseFile({ title: t('Import payments'), filters: [FILTERS.csv, { name: 'Text', patterns: ['*.txt', '*.tsv'] }, FILTERS.all] }).catch((e) => {
       toast('error', t('Import payments'), errorText(e));
@@ -254,7 +270,23 @@
       replace = r.choice === 'replace';
     }
     const name = path.split(/[\\/]/).pop() ?? path;
-    await takeParsed(parseRecipients(text, unit, unitInfo(unit).short), replace, 'From a file', name);
+    const parsed = parseRecipients(text, unit, unitInfo(unit).short);
+    // A file that does not name the unit of its amounts (one this app exported before it did, or made
+    // elsewhere): the unit they are read in is asked, not taken for granted (audit 7 E-TH4).
+    if (parsed.headerUnit === null && parsed.recipients.some((r) => r.amount !== null)) {
+      const r = await ask({
+        title: t('Import payments'),
+        message: t('The file does not say the unit of its amounts. Read them in %1?', unitInfo(unit).short),
+        informative: t('The first amount, %1, would be %2. If the amounts are in another unit, cancel, choose it in "Amounts in", and import the file again.', parsed.recipients.find((x) => x.amount !== null)!.amountText, formatAmount(parsed.recipients.find((x) => x.amount !== null)!.amount!, 'CHN', { withUnit: true })),
+        level: 'question',
+        choices: [
+          { id: 'cancel', label: 'Cancel' },
+          { id: 'read', label: t('Read in %1', unitInfo(unit).short), kind: 'primary' },
+        ],
+      });
+      if (r.choice !== 'read') return;
+    }
+    await takeParsed(parsed, replace, 'From a file', name);
   }
 
   async function exportList() {
@@ -277,7 +309,7 @@
     draft.source = '';
     draft.sourceFile = '';
     selected = null;
-    done = null;
+    if (!batchRun.busy) batchRun.done = null;
   }
 
   async function mergeAll() {
@@ -331,8 +363,20 @@
     if (path) toast('success', t('PSBT saved'), t('PSBT saved to disk'));
   }
 
+  /** Mark these recipients as in an unsigned transaction (PSBT) made (audit 7 E-TH7): paying them again asks first. */
+  function markInPsbt(ids: ReadonlySet<number>) {
+    draft.list = draft.list.map((r) => (ids.has(r.id) ? { ...r, inPsbt: true, note: 'In an unsigned transaction (PSBT) made before: if it was sent, this pays again' } : r));
+  }
+
+  /** Until a block comes after `height`, or the user stops (a payment waits for the change of its last transactions to confirm). */
+  async function waitForBlock(height: number): Promise<boolean> {
+    while (!batchRun.stop && (node.tip?.height ?? 0) <= height) await new Promise((done) => setTimeout(done, 1000));
+    return !batchRun.stop;
+  }
+
   async function pay() {
-    if (!api || wallet === null || busy) return;
+    // One payment at a time, whatever page made it (audit 7 E-TH1).
+    if (!api || wallet === null || batchRun.busy) return;
     // A list being checked is paid once checked.
     while (checking) await checkRun;
     const list = ready;
@@ -366,6 +410,21 @@
         return;
       }
     }
+    // Recipients of an unsigned transaction made before: if it was signed and sent elsewhere, they would be paid twice.
+    const inPsbt = list.filter((r) => r.inPsbt).length;
+    if (inPsbt) {
+      const r = await ask({
+        title: t('Batch pay'),
+        message: tn('%n recipient(s) of the list are in an unsigned transaction (PSBT) made before.', inPsbt),
+        informative: t('If that transaction was signed and sent, paying them now pays them a second time. Pay them only if it was not sent.'),
+        level: 'warning',
+        choices: [
+          { id: 'cancel', label: 'Cancel' },
+          { id: 'go', label: 'Pay them again', kind: 'danger' },
+        ],
+      });
+      if (r.choice !== 'go') return;
+    }
     // Coins chosen in "Choose coins" pay a list of one transaction only (the panel is not offered for more); the
     // same choice, or none, goes to every part (audit port-2 #1).
     const coinsChosen = prefs.coinControl && selectedCoins.length > 0;
@@ -373,9 +432,11 @@
       await inform(t('Batch pay'), t('The coins chosen in "Choose coins" pay one transaction, of at most %1 recipients: this list takes %2. Shorten the list, or turn "Choose coins" off.', PART_SIZE, parts.length), 'warning');
       return;
     }
+    if (batchRun.busy) return;
     const cc = coinChoice ? { selected: selectedCoins } : {};
-    busy = true;
-    done = null;
+    batchRun.busy = true;
+    batchRun.stop = false;
+    batchRun.done = null;
     // The passphrase of a locked wallet, kept only while the parts are made (each is signed as it is made), then dropped.
     let passphrase: string | undefined;
     let prepared: Prepared | null = null;
@@ -385,13 +446,13 @@
         return api.prepare(recipientsOf(parts[0]), cc, feeChoice, p);
       });
     } catch (e) {
-      busy = false;
+      batchRun.busy = false;
       passphrase = undefined;
       await inform(t('Batch pay'), errorText(e), 'warning');
       return;
     }
     if (!prepared) {
-      busy = false;
+      batchRun.busy = false;
       return;
     }
     const amount = list.reduce((n, r) => n + r.amount!, 0n);
@@ -404,6 +465,7 @@
     const totalPaid = draft.subtractFee ? amount : amount + estimate.total;
     const informative = [
       several ? t('%1 transactions of at most %2 recipients, sent one after the other.', parts.length, PART_SIZE) : t('One transaction of %1 vbytes, %2 of a block.', prepared.vsize, formatShare((prepared.vsize * 4) / MAX_BLOCK_WEIGHT)),
+      parts.length > CHAINED_PARTS ? t('After every %1 transactions, the rest waits for a block: keep the app open until the last is sent.', CHAINED_PARTS) : '',
       several
         ? t('Transaction fees of the %1 transactions (about %2 kvB): about %3', parts.length, (estimate.vsize / 1000).toPrecision(3), formatAmount(estimate.total, prefs.unit, { withUnit: true }))
         : t('Transaction fee (%1 kvB): %2', kvb, formatAmount(prepared.fee, prefs.unit, { withUnit: true })),
@@ -426,25 +488,36 @@
     });
     if (answer.choice !== 'send' && answer.choice !== 'psbt') {
       api.discard(prepared.token).catch(() => undefined);
-      busy = false;
+      batchRun.busy = false;
       passphrase = undefined;
       return;
     }
     const txids: string[] = [];
     let paid = 0;
     let paidAmount = 0n;
-    const paidIds = new Set<number>();
+    let failure = '';
     try {
       if (answer.choice === 'psbt') {
         const { psbt } = await api.createPsbt(prepared.token);
-        busy = false;
+        // Its recipients stay in the list, marked: the PSBT may be signed and sent elsewhere (audit 7 E-TH7).
+        markInPsbt(new Set(parts[0].map((r) => r.id)));
+        batchRun.busy = false;
         await presentPsbt(psbt, prepared.recipients);
-        done = { txids: [], count: parts[0].length, amount, psbt: true };
+        batchRun.done = { txids: [], count: parts[0].length, amount, psbt: true };
         return;
       }
-      progress = { part: 1, parts: parts.length, paid: 0 };
+      batchRun.progress = { part: 1, parts: parts.length, paid: 0 };
+      let chainedSince = 0;
       for (let k = 0; k < parts.length; k++) {
-        progress = { part: k + 1, parts: parts.length, paid };
+        if (k > 0 && batchRun.stop) break;
+        // A long list waits for a block after CHAINED_PARTS transactions: each may spend the change of the
+        // one before, and the node takes a chain of them only so long (audit 7 E-TH3).
+        if (k > 0 && k - chainedSince >= CHAINED_PARTS) {
+          batchRun.progress = { part: k + 1, parts: parts.length, paid, waiting: true };
+          if (!(await waitForBlock(node.tip?.height ?? 0))) break;
+          chainedSince = k;
+        }
+        batchRun.progress = { part: k + 1, parts: parts.length, paid };
         if (k > 0) {
           prepared = await api.prepare(recipientsOf(parts[k]), cc, feeChoice, passphrase);
           // Held to what the confirmation showed: a fee above its estimate is asked about before it is paid.
@@ -467,35 +540,40 @@
         }
         const result = await api.commit(prepared!.token);
         if (!result.complete && result.psbt) {
-          // A hardware wallet signed only part of it (a multisig wallet): the rest goes to the user.
+          // A hardware wallet signed only part of it (a multisig wallet): the rest goes to the user, and
+          // its recipients stay in the list, marked (audit 7 E-TH7).
+          markInPsbt(new Set(parts[k].map((r) => r.id)));
           await presentPsbt(result.psbt, prepared!.recipients);
           break;
         }
         if (result.txid) txids.push(result.txid);
-        for (const r of parts[k]) {
-          paidIds.add(r.id);
-          paidAmount += r.amount!;
-        }
+        // What was paid leaves the list at once (audit 7 E-TH1): what stays was not paid.
+        const sent = new Set(parts[k].map((r) => r.id));
+        for (const r of parts[k]) paidAmount += r.amount!;
         paid += parts[k].length;
+        draft.list = draft.list.filter((r) => !sent.has(r.id));
+        batchRun.done = { txids: [...txids], count: paid, amount: paidAmount, psbt: false, left: list.length - paid };
       }
     } catch (e) {
-      await inform(t('Batch pay'), paid ? t('%1 recipients were paid, in %2 transactions; the others were not: %3', paid, txids.length, errorText(e)) : errorText(e), 'error');
+      failure = errorText(e);
+      await inform(t('Batch pay'), paid ? t('%1 recipients were paid, in %2 transactions; the others were not: %3', paid, txids.length, failure) : failure, 'error');
     } finally {
       passphrase = undefined;
-      progress = null;
-      busy = false;
+      batchRun.progress = null;
+      batchRun.busy = false;
+      batchRun.stop = false;
     }
     if (paid) {
-      // What was paid leaves the list; what was not stays, to send again.
-      await setList(draft.list.filter((r) => !paidIds.has(r.id)));
       selected = null;
       if (!draft.list.length) {
         draft.source = '';
         draft.sourceFile = '';
         draft.skipped = [];
       }
-      done = { txids, count: paid, amount: paidAmount, psbt: false };
-      toast('success', t('Batch sent'), tn('%n recipient(s) paid', paid));
+      const left = list.length - paid;
+      batchRun.done = { txids, count: paid, amount: paidAmount, psbt: false, left, error: failure };
+      if (left) toast('warning', t('Batch partly sent'), t('%1 recipients paid; %2 were not and stay in the list, to pay again.', paid, left));
+      else toast('success', t('Batch sent'), tn('%n recipient(s) paid', paid));
       nav.highlightTx = txids[txids.length - 1] ?? null;
     }
   }
@@ -533,8 +611,8 @@
           {#each UNITS as u (u.id)}<option value={u.id}>{u.short}</option>{/each}
         </select>
       </label>
-      <button type="button" class="btn small" onclick={openPaste}><Icon name="paste" size={15} /> Paste…</button>
-      <button type="button" class="btn small" onclick={importFile}><Icon name="upload" size={15} /> Import CSV…</button>
+      <button type="button" class="btn small" disabled={busy} onclick={openPaste}><Icon name="paste" size={15} /> Paste…</button>
+      <button type="button" class="btn small" disabled={busy} onclick={importFile}><Icon name="upload" size={15} /> Import CSV…</button>
       <button type="button" class="btn ghost small" disabled={!draft.list.length} onclick={exportList}><Icon name="download" size={15} /> Export…</button>
       <button type="button" class="btn ghost small" disabled={!draft.list.length || busy} onclick={clearList}><Icon name="trash" size={15} /> Clear</button>
     </div>
@@ -686,8 +764,12 @@
 
       {#if progress}
         <div class="th-progress" role="status" aria-live="polite">
-          <strong>{t('Sending transaction %1 of %2…', progress.part, progress.parts)}</strong>
+          <strong>{progress.waiting ? t('Waiting for a block to send transaction %1 of %2…', progress.part, progress.parts) : t('Sending transaction %1 of %2…', progress.part, progress.parts)}</strong>
           <Meter value={progress.part - 1} max={progress.parts} label="Transactions sent" text={`${progress.part - 1} / ${progress.parts}`} />
+          {#if progress.parts > 1}
+            <span class="faint small">{batchRun.stop ? t('Stopping after this transaction: the rest stays in the list.') : t('Keep the app open until the last is sent. What is sent leaves the list.')}</span>
+            <button type="button" id="bp-stop" class="btn ghost small" disabled={batchRun.stop} onclick={() => (batchRun.stop = true)}>Stop after this transaction</button>
+          {/if}
         </div>
       {/if}
 
@@ -698,6 +780,8 @@
       {#if done}
         <div class="done" role="status">
           <strong>{done.psbt ? t('Unsigned transaction made for %1 recipients', done.count) : tn('%n recipient(s) paid', done.count)}</strong>
+          {#if done.psbt}<span class="faint small">{t('They stay in the list, marked: if the transaction is signed and sent elsewhere, do not pay them again.')}</span>{/if}
+          {#if !done.psbt && done.left}<span class="th-warn small">{t('%1 recipients were not paid: they stay in the list, to pay again.', done.left)}{#if done.error} <SafeText text={done.error} />{/if}</span>{/if}
           <span><Amount sats={done.amount} /></span>
           {#each done.txids as txid (txid)}<span class="mono small break" translate="no">{txid}</span>{/each}
           {#if done.txids.length}<button type="button" class="btn small" onclick={() => go('payments', 'batches')}><Icon name="ledger" size={15} /> Show in Payments</button>{/if}

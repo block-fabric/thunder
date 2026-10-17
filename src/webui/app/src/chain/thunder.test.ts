@@ -18,6 +18,8 @@ import {
   blockStatOf,
   blocksToClear,
   capacityOf,
+  ambiguousComma,
+  CHAINED_PARTS,
   checkRecipients,
   dailyTotals,
   dayOf,
@@ -40,8 +42,9 @@ import {
   splitCsvLine,
   throughputOf,
   totalsOf,
+  unitOfHeader,
 } from './th/model';
-import { draft, resetDraft, resetThroughput, th } from './th/store.svelte';
+import { batchRun, draft, resetBatchRun, resetDraft, resetThroughput, th } from './th/store.svelte';
 import DialogHost from '../components/DialogHost.svelte';
 import { setTransport, type BridgeRequest } from '../lib/bridge';
 import { buildCommands, menuSections } from '../lib/commands.svelte';
@@ -103,6 +106,9 @@ const calls: BridgeRequest[] = [];
 let prepared = 0;
 let fileText = '';
 let commitFails = false;
+/** A commit of this token waits until released (a payment caught in the middle). */
+let holdToken = '';
+let releaseHold: () => void = () => undefined;
 
 function stats(height: number) {
   return {
@@ -134,10 +140,13 @@ async function fakeNode(r: BridgeRequest): Promise<unknown> {
       return { token: `t${prepared}`, fee: 1000 * prepared, vsize: 31 * recipients.length + 110, total: recipients.reduce((n, x) => n + x.amount, 0) + 1000, recipients, privateKeysDisabled: false, externalSigner: false, txid: id(String(prepared)) };
     }
     case 'wallet.send.commit':
+      if (holdToken && String(p.token) === holdToken) await new Promise<void>((done) => (releaseHold = done));
       if (commitFails && String(p.token) === 't2') throw Object.assign(new Error('Insufficient funds'), { code: -6 });
       return { complete: true, txid: id(String(p.token).slice(1)) };
     case 'wallet.send.discard':
       return true;
+    case 'wallet.send.psbt':
+      return { psbt: 'cHNidP8BAAoCAAAAAAAAAAAAAA==' };
     case 'wallet.coins':
       return [{ address: A, label: '', coins: [{ txid: 'cc'.repeat(32), vout: 0, address: A, label: '', sats: 1_000 * 100_000_000, time: 1_700_000_000, depth: 10, locked: false }] }];
     case 'wallet.coinControl.summary':
@@ -197,7 +206,9 @@ beforeEach(() => {
   prepared = 0;
   fileText = '';
   commitFails = false;
+  holdToken = '';
   resetDraft();
+  resetBatchRun();
   resetThroughput();
   setTransport(fakeNode);
 });
@@ -209,6 +220,7 @@ afterEach(() => {
   wallets.current = null;
   resetWalletData();
   resetDraft();
+  resetBatchRun();
   resetThroughput();
   nav.tab = '';
 });
@@ -403,6 +415,9 @@ describe.runIf(CHAIN.name === 'Thunder')('the pages of Thunder', () => {
     go('batchpay', 'import');
     render(BatchPay);
     render(DialogHost);
+    // The file does not name the unit of its amounts: asked (audit 7 E-TH4).
+    await waitFor(() => expect(document.body.textContent).toContain('The file does not say the unit of its amounts. Read them in CHN?'));
+    await answer('read');
     await waitFor(() => expect(draft.list.length).toBe(PART_SIZE + 2));
     expect(called('file.choose').length).toBe(1);
     expect(draft.sourceFile).toBe('payroll.csv');
@@ -433,6 +448,9 @@ describe.runIf(CHAIN.name === 'Thunder')('the pages of Thunder', () => {
     go('batchpay', 'import');
     render(BatchPay);
     render(DialogHost);
+    // The file does not name the unit of its amounts: asked (audit 7 E-TH4).
+    await waitFor(() => expect(document.body.textContent).toContain('The file does not say the unit of its amounts. Read them in CHN?'));
+    await answer('read');
     await waitFor(() => expect(draft.list.length).toBe(PART_SIZE + 2));
     await waitFor(() => expect(draft.list.every((r) => !r.problem)).toBe(true));
     await fireEvent.click(document.querySelector('#bp-pay')!);
@@ -613,5 +631,155 @@ describe('Simple mode on Thunder', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Payments today' })).toBeTruthy());
     expect(screen.queryByRole('button', { name: /Batch pay/ })).toBeNull();
     expect(screen.getByRole('button', { name: /Send/ })).toBeTruthy();
+  });
+});
+
+describe('audit 7 E: Thunder', () => {
+  /** Paste a list into the page and wait until it is checked. */
+  async function pasteList(text: string, rows: number) {
+    await fireEvent.click(screen.getByRole('button', { name: /Paste/ }));
+    await fireEvent.input(document.querySelector('#bp-paste')!, { target: { value: text } });
+    await fireEvent.submit(document.querySelector('#bp-paste-form')!);
+    await waitFor(() => expect(draft.list.length).toBe(rows));
+    await waitFor(() => expect(draft.list.every((r) => !r.problem)).toBe(true), { timeout: 20000 });
+  }
+  const list = (n: number) => Array.from({ length: n }, (_, i) => `${addr(i)},0.001`).join('\n');
+
+  it('E-TH1: a payment on its way outlives the page; a page made again cannot pay the list again', async () => {
+    holdToken = 't1';
+    const first = render(BatchPay);
+    render(DialogHost);
+    await waitFor(() => expect(called('wallet.fee').length).toBeGreaterThan(0));
+    await pasteList(list(PART_SIZE + 3), PART_SIZE + 3);
+    await fireEvent.click(document.querySelector('#bp-pay')!);
+    await answer('send', 5000);
+    await waitFor(() => expect(called('wallet.send.commit').length).toBe(1));
+    expect(batchRun.busy).toBe(true);
+    // The user goes to another page and comes back while the first transaction is being sent.
+    first.unmount();
+    render(BatchPay);
+    await waitFor(() => expect(document.querySelector<HTMLButtonElement>('#bp-pay')!.disabled).toBe(true));
+    expect(document.body.textContent).toContain('Sending transaction 1 of 2');
+    await fireEvent.click(document.querySelector('#bp-pay')!);
+    // The first is sent: its recipients leave the list at once, before the second is.
+    releaseHold();
+    await waitFor(() => expect(draft.list.length).toBe(3));
+    // (The second, of three recipients, costs more than its estimate: asked.)
+    await answer('go', 5000);
+    await waitFor(() => expect(called('wallet.send.commit').length).toBe(2));
+    await waitFor(() => expect(batchRun.busy).toBe(false));
+    expect(draft.list.length).toBe(0);
+    expect(called('wallet.send.prepare').length).toBe(2);
+    expect(called('wallet.send.commit').map((c) => (c.params as { token: string }).token)).toEqual(['t1', 't2']);
+    expect(batchRun.done).toMatchObject({ count: PART_SIZE + 3, left: 0 });
+  }, 60000);
+
+  it('E-TH1: each transaction leaves the list when it is sent; stopping keeps the rest, to pay again', async () => {
+    holdToken = 't1';
+    render(BatchPay);
+    render(DialogHost);
+    await waitFor(() => expect(called('wallet.fee').length).toBeGreaterThan(0));
+    await pasteList(list(2 * PART_SIZE + 1), 2 * PART_SIZE + 1);
+    await fireEvent.click(document.querySelector('#bp-pay')!);
+    await answer('send', 5000);
+    await waitFor(() => expect(called('wallet.send.commit').length).toBe(1));
+    await fireEvent.click(document.querySelector('#bp-stop')!);
+    releaseHold();
+    await waitFor(() => expect(batchRun.busy).toBe(false));
+    expect(called('wallet.send.commit').length).toBe(1);
+    expect(draft.list.length).toBe(PART_SIZE + 1);
+    expect(batchRun.done).toMatchObject({ count: PART_SIZE, left: PART_SIZE + 1 });
+    expect(document.body.textContent).toContain(`${PART_SIZE + 1} recipients were not paid: they stay in the list, to pay again.`);
+  }, 60000);
+
+  it('E-TH3: after CHAINED_PARTS transactions the rest waits for a block', async () => {
+    const n = (CHAINED_PARTS + 1) * PART_SIZE;
+    render(BatchPay);
+    render(DialogHost);
+    await waitFor(() => expect(called('wallet.fee').length).toBeGreaterThan(0));
+    // A list of CHAINED_PARTS + 1 transactions, each part's fee within its estimate (no question on the way).
+    draft.list = Array.from({ length: n }, (_, i) => newRecipient({ address: addr(i), amount: 100_000n }));
+    await waitFor(() => expect(totalsOf(draft.list, 'regtest').parts).toBe(CHAINED_PARTS + 1));
+    await fireEvent.click(document.querySelector('#bp-pay')!);
+    await waitFor(() => expect(document.body.textContent).toContain(`After every ${CHAINED_PARTS} transactions, the rest waits for a block`), { timeout: 20000 });
+    await answer('send', 5000);
+    await waitFor(() => expect(batchRun.progress?.waiting).toBe(true), { timeout: 20000 });
+    expect(called('wallet.send.commit').length).toBe(CHAINED_PARTS);
+    expect(draft.list.length).toBe(PART_SIZE);
+    expect(document.body.textContent).toContain(`Waiting for a block to send transaction ${CHAINED_PARTS + 1} of ${CHAINED_PARTS + 1}`);
+    node.tip = { ...node.tip!, height: 21, hash: 'cd'.repeat(32) };
+    await waitFor(() => expect(called('wallet.send.commit').length).toBe(CHAINED_PARTS + 1), { timeout: 5000 });
+    await waitFor(() => expect(draft.list.length).toBe(0));
+  }, 120000);
+
+  it('E-TH4: the CSV names its unit; a list read back honours it, whatever unit is chosen', async () => {
+    const csv = recipientsCsv([newRecipient({ address: A, amount: 25_000_000n, label: 'Alice' })], 'mCHN');
+    expect(csv.split(/\r?\n/)[0]).toBe('"Address","Amount (mCHN)","Label"');
+    const back = parseRecipients(csv, 'CHN', 'CHN');
+    expect(back.unit).toBe('mCHN');
+    expect(back.recipients[0].amount).toBe(25_000_000n);
+    expect([unitOfHeader('Amount (sat)'), unitOfHeader('sats'), unitOfHeader('Amount [bits]'), unitOfHeader('Amount'), unitOfHeader('Amount (BTC)')]).toEqual(['sat', 'sat', 'bits', null, '?']);
+    // A unit this app does not know: no amount is read.
+    const unknown = parseRecipients(`address,amount (BTC)\n${A},1`, 'CHN', 'CHN');
+    expect(unknown.headerUnit).toBe('?');
+    expect(unknown.recipients[0].amount).toBeNull();
+    // A file that names none: the unit is asked; cancelled, nothing is read.
+    fileText = `address,amount\n${A},250`;
+    go('batchpay', 'import');
+    render(BatchPay);
+    render(DialogHost);
+    await waitFor(() => expect(document.body.textContent).toContain('The file does not say the unit of its amounts. Read them in CHN?'));
+    expect(document.body.textContent).toContain('The first amount, 250, would be 250.00000000 CHN');
+    await answer('cancel');
+    expect(draft.list.length).toBe(0);
+  });
+
+  it('E-TH6: a comma that may separate thousands is not read', async () => {
+    expect([ambiguousComma('1,000'), ambiguousComma('12,500,000'), ambiguousComma('1,5'), ambiguousComma('0,001'), ambiguousComma('1.000')]).toEqual([true, true, false, false, false]);
+    const r = parseRecipients(`${A};1,000\n${B};"2,500"\n${C};1,5`, 'CHN', 'CHN');
+    expect(r.recipients.map((x) => x.amount)).toEqual([null, null, 150_000_000n]);
+    const checked = await checkRecipients(r.recipients, 'regtest');
+    expect(checked[0].problem).toMatch(/A comma here may separate thousands/);
+  });
+
+  it('E-TH7: recipients of an unsigned transaction stay, marked; paying them asks first', async () => {
+    prefs.psbtControls = true;
+    render(BatchPay);
+    render(DialogHost);
+    await waitFor(() => expect(called('wallet.fee').length).toBeGreaterThan(0));
+    await pasteList(`${A},1\n${B},2`, 2);
+    await fireEvent.click(document.querySelector('#bp-pay')!);
+    await answer('psbt', 5000);
+    await answer('discard');
+    await waitFor(() => expect(draft.list.every((r) => r.inPsbt)).toBe(true));
+    expect(draft.list[0].note).toMatch(/In an unsigned transaction \(PSBT\) made before/);
+    expect(called('wallet.send.commit').length).toBe(0);
+    await fireEvent.click(document.querySelector('#bp-pay')!);
+    await waitFor(() => expect(document.body.textContent).toContain('2 recipients of the list are in an unsigned transaction (PSBT) made before.'));
+    await answer('cancel');
+    expect(called('wallet.send.prepare').length).toBe(1);
+  }, 30000);
+
+  it('E-TH8: a base58 address, valid on the mainchain too, is noted', async () => {
+    const legacy = 'mipcBbFg9gMiCh81Kj8tqqdgoZub1ZJRfn';
+    const checked = await checkRecipients([newRecipient({ address: legacy, amount: SAT }), newRecipient({ address: A, amount: SAT })], 'regtest');
+    expect(checked[0].problem).toBe('');
+    expect(checked[0].note).toMatch(/An old-style address: the same address is valid on the mainchain/);
+    expect(checked[1].note).toBe('');
+  });
+
+  it('E-TH10: Pay again asks before it replaces the list; a list cut at 50 000 says so', async () => {
+    draft.list = [newRecipient({ address: C, amount: SAT })];
+    render(Payments);
+    render(DialogHost);
+    const grid = await screen.findByRole('grid', { name: 'Payments of the wallet' });
+    await waitFor(() => expect(within(grid).getAllByRole('row').length).toBe(4));
+    await fireEvent.click(screen.getByRole('tab', { name: 'Batches' }));
+    await waitFor(() => expect(within(grid).getAllByRole('row').length).toBe(2));
+    await fireEvent.click(within(grid).getAllByRole('row')[1]);
+    await fireEvent.click(await screen.findByRole('button', { name: /Pay again/ }));
+    await waitFor(() => expect(document.body.textContent).toContain('Batch pay has a list of 1 recipients. Replace it'));
+    await answer('cancel');
+    expect(draft.list.map((r) => r.address)).toEqual([C]);
   });
 });

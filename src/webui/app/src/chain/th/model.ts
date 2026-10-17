@@ -4,7 +4,7 @@
 // the statistics of its blocks.
 import { CHAIN } from '../config';
 import { checkAddress, addressTypeOf, networkParams, bech32Decode, base58Decode, NETWORKS } from '../../lib/address';
-import { formatAmount, parseAmount, unitInfo, type Unit } from '../../lib/units';
+import { formatAmount, parseAmount, unitInfo, UNITS, type Unit } from '../../lib/units';
 import { compareRecords, csvCell, isoLocal, toCsv, type TxRecord } from '../../lib/wallet';
 
 // --- The chain ---
@@ -13,6 +13,13 @@ import { compareRecords, csvCell, isoLocal, toCsv, type TxRecord } from '../../l
 export const MAX_BLOCK_WEIGHT = CHAIN.blockWeight ?? 32_000_000;
 /** The recipients of one transaction of a batch: their outputs and the inputs that pay them stay well below a standard transaction. */
 export const PART_SIZE = 1500;
+/**
+ * The transactions of a batch sent one after the other before the rest waits for a block (audit 7 E-TH3).
+ * A wallet with few confirmed coins pays each with the change of the one before: the node takes a chain of
+ * them up to its cluster limit (Thunder: 2,000 kvB, 24 transactions of 1,500 P2TR outputs at 64.6 kvB) and
+ * the wallet builds one of at most 24 (-limitancestorcount); 20 stays under both.
+ */
+export const CHAINED_PARTS = 20;
 /** The most recipients a list takes (the table draws only the rows in view; the transactions are sent one after the other). */
 export const MAX_RECIPIENTS = 50_000;
 /** The largest file of recipients read (about 50 000 lines). */
@@ -36,6 +43,8 @@ export interface Recipient {
   problem: string;
   /** What deserves a look but does not stop it (an address given twice is a problem; the same amount ten times is not). */
   note: string;
+  /** In an unsigned transaction (PSBT) made before (audit 7 E-TH7): paying it again may pay it twice. */
+  inPsbt?: boolean;
 }
 
 let nextRecipient = 1;
@@ -81,9 +90,34 @@ export function detectSeparator(lines: readonly string[]): string {
 
 const HEADER_WORDS = {
   address: /^(address|recipient|to|pay ?to|destination|addr)$/i,
-  amount: /^(amount|value|sum|coins|chn|sats?|satoshis?|btc)$/i,
+  amount: /^(amount|value|sum|coins|chn|sats?|satoshis?|btc)(\s*[([][^)\]]*[)\]])?$/i,
   label: /^(label|name|memo|note|description|comment|reference|ref)$/i,
 };
+
+/**
+ * The unit a header names for the amounts (audit 7 E-TH4): "Amount (mCHN)" as this app exports, or a column
+ * named by its unit ("sats", "CHN"). null when it names none; '?' when it names one this app does not know.
+ */
+export function unitOfHeader(field: string): Unit | '?' | null {
+  const f = field.trim();
+  const inside = /[([]\s*([^)\]]*?)\s*[)\]]$/.exec(f);
+  const word = inside ? inside[1] : /^(sats?|satoshis?)$/i.test(f) ? 'sat' : /^chn$/i.test(f) ? 'CHN' : '';
+  if (!word) return null;
+  const w = word.toLowerCase();
+  if (w === 'sats' || w === 'satoshi' || w === 'satoshis') return 'sat';
+  const found = UNITS.find((u) => u.id.toLowerCase() === w || u.short.toLowerCase() === w);
+  return found ? found.id : '?';
+}
+
+/**
+ * An amount whose comma may separate thousands as well as decimals (audit 7 E-TH6): "1,000" is a thousand
+ * to some and one to others, "12,500" twelve thousand five hundred or twelve and a half. Such an amount is
+ * not read: it is to be written again without the comma, or with a decimal point. ("1,5" and "0,001" are
+ * not ambiguous: a group of thousands has three digits, and none starts with 0.)
+ */
+export function ambiguousComma(text: string): boolean {
+  return /^[1-9]\d{0,2}(,\d{3})+$/.test(text.trim().replace(/[\s  _]/g, ''));
+}
 
 export interface ParsedList {
   recipients: Recipient[];
@@ -93,6 +127,10 @@ export interface ParsedList {
   separator: string;
   /** The list was longer than MAX_RECIPIENTS: the rest was left out. */
   truncated: boolean;
+  /** The unit the amounts were read in: the one the header names, else the one asked for. */
+  unit: Unit;
+  /** The unit the header names: null when it names none (the amounts were read in the unit asked for), '?' when not one of this app. */
+  headerUnit: Unit | '?' | null;
 }
 
 /** Strip the unit after an amount ("1.5 CHN", "200 sat") when it is the unit the amounts are read in. */
@@ -130,7 +168,10 @@ export function textOfFile(bytes: Uint8Array): string | null {
  * a semicolon, a tab or spaces; a header line naming the columns is read for their order and left out.
  * Amounts are read in `unit`. Nothing is checked against the chain yet (checkRecipients).
  */
-export function parseRecipients(text: string, unit: Unit, unitShort: string, firstLine = 1): ParsedList {
+export function parseRecipients(text: string, askedUnit: Unit, askedShort: string, firstLine = 1): ParsedList {
+  let unit = askedUnit;
+  let unitShort = askedShort;
+  let headerUnit: Unit | '?' | null = null;
   const lines = text.replace(/^﻿/, '').split(/\r\n|\n|\r/);
   const separator = detectSeparator(lines.filter((l) => l.trim() && !l.trim().startsWith('#')));
   const split = (l: string) => (separator === ' ' ? l.trim().split(/\s+/) : splitCsvLine(l, separator));
@@ -153,6 +194,12 @@ export function parseRecipients(text: string, unit: Unit, unitShort: string, fir
         header = true;
         const l = at(HEADER_WORDS.label);
         order = { address: a >= 0 ? a : 0, amount: m >= 0 ? m : a === 1 ? 0 : 1, label: l >= 0 ? l : -1 };
+        // The unit the header names is the unit of the amounts, whatever unit was asked for.
+        headerUnit = m >= 0 ? unitOfHeader(named[m]) : null;
+        if (headerUnit && headerUnit !== '?') {
+          unit = headerUnit;
+          unitShort = unitInfo(unit).short;
+        }
         continue;
       }
     }
@@ -171,10 +218,11 @@ export function parseRecipients(text: string, unit: Unit, unitShort: string, fir
       skipped.push({ line: lineNo, text: raw.slice(0, 120), why: 'No address and no amount' });
       continue;
     }
-    const parsed = parseAmount(amountText, unit);
-    recipients.push(newRecipient({ address, amountText, amount: parsed.ok ? parsed.sats : null, label, line: lineNo }));
+    // Amounts in a unit this app does not know, or with a comma that may separate thousands, are not read.
+    const parsed = headerUnit === '?' || ambiguousComma(amountText) ? null : parseAmount(amountText, unit);
+    recipients.push(newRecipient({ address, amountText, amount: parsed?.ok ? parsed.sats : null, label, line: lineNo }));
   }
-  return { recipients, skipped, header, separator, truncated };
+  return { recipients, skipped, header, separator, truncated, unit, headerUnit };
 }
 
 /**
@@ -245,12 +293,20 @@ export async function checkRecipients(list: readonly Recipient[], network: strin
       problem = why;
     }
     if (!problem) {
-      if (r.amount === null) problem = r.amountText.trim() ? 'Not an amount' : 'No amount';
+      if (r.amount === null && ambiguousComma(r.amountText)) problem = 'A comma here may separate thousands: write the amount without it, or with a decimal point';
+      else if (r.amount === null) problem = r.amountText.trim() ? 'Not an amount' : 'No amount';
       else if (r.amount <= 0n) problem = 'The amount to pay must be larger than 0.';
       else if (r.amount < dustThreshold(address, network)) problem = 'Too small to send: the output would be dust';
     }
     if (!problem && (seen.get(addressKey(address)) ?? 0) > 1) problem = 'This address is in the list more than once';
     if (!problem && r.amount !== null && r.amount >= 100n * 100_000_000n) note = 'A large amount';
+    // Base58 addresses have the prefixes of the Chains mainchain (audit 7 E-TH8): such an address of the
+    // mainchain is valid here too, and is paid on Thunder.
+    if (!problem && !note) {
+      const type = addressTypeOf(address, network);
+      if (type === 'legacy' || type === 'p2sh-segwit') note = 'An old-style address: the same address is valid on the mainchain. Check it is meant for Thunder';
+    }
+    if (!problem && r.inPsbt) note = 'In an unsigned transaction (PSBT) made before: if it was sent, this pays again';
     if (problem === r.problem && note === r.note && address === r.address) out.push(r);
     else out.push({ ...r, address, problem, note });
   }
@@ -352,10 +408,10 @@ export function partsOf<T>(ready: readonly T[], size = PART_SIZE): T[][] {
   return out;
 }
 
-/** A list as CSV (address, amount in the unit, label), to read back with parseRecipients. */
+/** A list as CSV (address, amount in the unit, label), to read back with parseRecipients: the header names the unit (audit 7 E-TH4). */
 export function recipientsCsv(list: readonly Recipient[], unit: Unit): string {
   return toCsv(
-    ['Address', 'Amount', 'Label'],
+    ['Address', `Amount (${unitInfo(unit).short})`, 'Label'],
     list.map((r) => [r.address, r.amount === null ? r.amountText : formatAmount(r.amount, unit, { separators: false }), r.label]),
   );
 }

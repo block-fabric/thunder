@@ -11,7 +11,7 @@
   import SafeText from '../../components/SafeText.svelte';
   import TabRow from '../../components/TabRow.svelte';
   import TxDetailsDialog from '../../components/TxDetailsDialog.svelte';
-  import { errorText } from '../../lib/dialogs.svelte';
+  import { ask, errorText, inform } from '../../lib/dialogs.svelte';
   import { FILTERS, saveTextAs } from '../../lib/files';
   import { formatTime } from '../../lib/format';
   import { t, tn } from '../../lib/i18n.svelte';
@@ -25,7 +25,7 @@
   import { simpleMode } from '../../lib/uimode.svelte';
   import Bars from '../th/Bars.svelte';
   import { dailyTotals, dayOf, newRecipient, paymentsCsv, paymentsOf, type Payment } from '../th/model';
-  import { draft } from '../th/store.svelte';
+  import { batchRun, draft } from '../th/store.svelte';
 
   type Tab = 'all' | 'batches' | 'days';
   type Period = '7' | '30' | '90' | 'all';
@@ -155,6 +155,24 @@
   /** The recipients of a payment made before, into Batch pay: each paid what its output paid. */
   async function payAgain(p: Payment) {
     if (wallet === null) return;
+    // Not while a batch is being paid: its list is the one paid (audit 7 E-TH1).
+    if (batchRun.busy) {
+      await inform(t('Batch pay'), t('A batch payment is on its way. Wait until it ends.'), 'warning');
+      return;
+    }
+    // The list of Batch pay is replaced only if the user says so (audit 7 E-TH10).
+    if (draft.list.length) {
+      const r = await ask({
+        title: t('Batch pay'),
+        message: t('Batch pay has a list of %1 recipients. Replace it with the recipients of this payment?', draft.list.length),
+        level: 'question',
+        choices: [
+          { id: 'cancel', label: 'Cancel' },
+          { id: 'replace', label: 'Replace the list', kind: 'primary' },
+        ],
+      });
+      if (r.choice !== 'replace') return;
+    }
     const outputs = p.records.filter((r) => r.type === 'send' || r.type === 'sendOther');
     // The wallet counts the fee in the first output it paid (TransactionRecord): the details give the fee.
     let fee = 0n;
