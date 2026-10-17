@@ -140,6 +140,8 @@ public:
     struct DeploymentOptions {
         std::unordered_map<Consensus::DeploymentPos, VersionBitsParameters> version_bits_parameters{};
         std::unordered_map<Consensus::BuriedDeployment, int> activation_heights{};
+        //! Thunder: Consensus::Params::legacy_sigops_limit_height (-testactivationheight=legacysigops@<height>).
+        std::optional<int> legacy_sigops_height{};
     };
 
     /**

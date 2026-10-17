@@ -239,6 +239,13 @@ struct Params {
      */
     int64_t max_block_sigops_cost{MAX_BLOCK_SIGOPS_COST};
     int64_t MaxBlockSigOpsCost() const { return max_block_sigops_cost; }
+    /**
+     * Thunder: the height from which a transaction may execute at most
+     * MAX_TX_LEGACY_SIGOPS_CONSENSUS non-witness signature operations (BIP54's count;
+     * Consensus::CheckTxLegacySigops). Never, by default: until a network sets it, the limit is relay
+     * policy only. Set on regtest with -testactivationheight=legacysigops@<height>.
+     */
+    int legacy_sigops_limit_height{std::numeric_limits<int>::max()};
     /** Upper bound for the serialized size of a block; a sanity limit, not a consensus rule. */
     uint32_t MaxBlockSerializedSize() const { return std::max<uint32_t>(MAX_BLOCK_SERIALIZED_SIZE, max_block_weight); }
     std::chrono::seconds PowTargetSpacing() const

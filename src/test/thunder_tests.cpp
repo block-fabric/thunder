@@ -12,6 +12,7 @@
 #include <coins.h>
 #include <consensus/consensus.h>
 #include <consensus/merkle.h>
+#include <consensus/tx_verify.h>
 #include <consensus/validation.h>
 #include <crypto/sha256.h>
 #include <hash.h>
@@ -20,6 +21,7 @@
 #include <merkleblock.h>
 #include <node/miner.h>
 #include <node/mining_types.h>
+#include <policy/policy.h>
 #include <pow.h>
 #include <primitives/block.h>
 #include <script/script.h>
@@ -32,6 +34,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -222,7 +225,13 @@ BOOST_AUTO_TEST_CASE(chain_params)
         const MessageStartChars expected_magic{0x74, 0x68, 0x75, magic};
         BOOST_CHECK(params->MessageStart() == expected_magic);
         BOOST_CHECK_EQUAL(params->Bech32HRP(), hrp);
+        // The limit of legacy signature operations per transaction is not a network rule yet
+        // (LEGACY_SIGOPS_ACTIVATION_HEIGHT_PLACEHOLDER): relay policy only.
+        BOOST_CHECK_EQUAL(consensus.legacy_sigops_limit_height, std::numeric_limits<int>::max());
     }
+    // Set on regtest by -testactivationheight=legacysigops@<height>.
+    side_opts.dep_opts.legacy_sigops_height = 5;
+    BOOST_CHECK_EQUAL(CChainParams::RegTest(side_opts)->GetConsensus().legacy_sigops_limit_height, 5);
 
     // Plain regtest, for the tests of Bitcoin: no sidechain, and the limits of Bitcoin.
     const auto regtest{CChainParams::RegTest()};
@@ -430,6 +439,47 @@ BOOST_AUTO_TEST_CASE(block_sigops)
             BOOST_CHECK_EQUAL(state.GetDebugMessage(), c.debug);
         }
     }
+}
+
+BOOST_AUTO_TEST_CASE(mempool_cluster_size)
+{
+    // Thunder's networks take clusters of 2,000 kvB (a chained Batch pay); plain regtest keeps Bitcoin's.
+    BOOST_CHECK_EQUAL(m_node.mempool->m_opts.limits.cluster_size_vbytes, 2'000'000);
+    BOOST_CHECK_EQUAL(THUNDER_CLUSTER_SIZE_LIMIT_KVB, 2'000U);
+    BOOST_CHECK_EQUAL(DEFAULT_CLUSTER_SIZE_LIMIT_KVB, 101U);
+    // 24 chained transactions of 1,500 P2TR outputs (43 vbytes each, some 64.6 kvB a transaction) fit.
+    BOOST_CHECK_LE(24 * (1'500 * 43 + 1'000), int64_t{THUNDER_CLUSTER_SIZE_LIMIT_KVB} * 1'000);
+}
+
+BOOST_AUTO_TEST_CASE(legacy_sigops_per_transaction)
+{
+    // Spent scriptPubKeys whose signature operations are never run (in an OP_IF not taken) but count,
+    // as BIP54 counts them: a CHECKMULTISIG not after a number of keys counts 20.
+    const auto multisigs{[](int n) {
+        CScript script;
+        script << OP_0 << OP_IF;
+        for (int i{0}; i < n; ++i) script << OP_CHECKMULTISIG;
+        return script << OP_ENDIF << OP_1;
+    }};
+    CCoinsViewCache view{&CoinsViewEmpty::Get()};
+    const auto spend{[&](const std::vector<CScript>& scripts, const CScript& script_sig = {}) {
+        CMutableTransaction tx;
+        for (const CScript& script : scripts) {
+            const COutPoint out{Txid::FromUint256(m_rng.rand256()), 0};
+            view.AddCoin(out, Coin{CTxOut{COIN, script}, 1, false}, false);
+            tx.vin.emplace_back(out, script_sig);
+        }
+        tx.vout.emplace_back(COIN, CScript() << OP_TRUE);
+        return CTransaction{tx};
+    }};
+    // 2,500 in two inputs: at the limit.
+    BOOST_CHECK(Consensus::CheckTxLegacySigops(spend({multisigs(100), multisigs(25)}), view));
+    // One more, in the scriptSig of an input.
+    BOOST_CHECK(!Consensus::CheckTxLegacySigops(spend({multisigs(100), multisigs(25)}, CScript() << OP_CHECKSIG), view));
+    BOOST_CHECK(!Consensus::CheckTxLegacySigops(spend({multisigs(100), multisigs(25), CScript() << OP_CHECKSIG}), view));
+    // Witness signature operations do not count.
+    BOOST_CHECK(Consensus::CheckTxLegacySigops(spend(std::vector<CScript>(200, CScript() << OP_0 << std::vector<unsigned char>(20, 1))), view));
+    BOOST_CHECK_EQUAL(MAX_TX_LEGACY_SIGOPS_CONSENSUS, MAX_TX_LEGACY_SIGOPS);
 }
 
 BOOST_AUTO_TEST_CASE(miner_stays_under_the_limits)

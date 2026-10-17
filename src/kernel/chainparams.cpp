@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <span>
 #include <utility>
@@ -112,8 +113,17 @@ void CChainParams::MakeSidechain(const SidechainIdentity& identity)
     chainTxData = ChainTxData{.nTime = identity.genesis_time, .tx_count = 1, .dTxRate = 0};
 }
 
+/**
+ * Thunder: PLACEHOLDER for the height from which the BIP54 limit of legacy signature operations per
+ * transaction (MAX_TX_LEGACY_SIGOPS_CONSENSUS) is a consensus rule on the main, test and signet
+ * networks. Never until set: a network upgrade (soft fork) that every block producer has to run
+ * first. Until then the limit is relay policy (MAX_TX_LEGACY_SIGOPS). See README.md (Limits).
+ */
+static constexpr int LEGACY_SIGOPS_ACTIVATION_HEIGHT_PLACEHOLDER{std::numeric_limits<int>::max()};
+
 void CChainParams::ApplyDeploymentOptions(const DeploymentOptions& opts)
 {
+    if (opts.legacy_sigops_height) consensus.legacy_sigops_limit_height = *opts.legacy_sigops_height;
     for (const auto& [dep, height] : opts.activation_heights) {
         switch (dep) {
         case Consensus::BuriedDeployment::DEPLOYMENT_SEGWIT:
@@ -242,6 +252,7 @@ public:
         consensus.max_block_tx_weight = 31'000'000;
         // Signature operations scale with the blocks: eight times Bitcoin's.
         consensus.max_block_sigops_cost = 640'000;
+        consensus.legacy_sigops_limit_height = LEGACY_SIGOPS_ACTIVATION_HEIGHT_PLACEHOLDER;
         // Set when the slot activates on the mainchain: the height of the block that activated it.
         consensus.sidechain.main_activation_height = 0;
         // A tenth of the mainchain's withdrawal_min_score (64800); proposals within a day.
@@ -353,6 +364,7 @@ public:
         consensus.max_block_tx_weight = 31'000'000;
         // Signature operations scale with the blocks: eight times Bitcoin's.
         consensus.max_block_sigops_cost = 640'000;
+        consensus.legacy_sigops_limit_height = LEGACY_SIGOPS_ACTIVATION_HEIGHT_PLACEHOLDER;
         // The height of the mainchain block that activated the slot; nothing is left out at 0.
         consensus.sidechain.main_activation_height = 670; // the block that activated the slot on the restarted test network
         // A tenth of the testnet mainchain's withdrawal_min_score (300); proposals within an hour.
@@ -470,6 +482,7 @@ public:
         consensus.max_block_tx_weight = 31'000'000;
         // Signature operations scale with the blocks: eight times Bitcoin's.
         consensus.max_block_sigops_cost = 640'000;
+        consensus.legacy_sigops_limit_height = LEGACY_SIGOPS_ACTIVATION_HEIGHT_PLACEHOLDER;
         consensus.sidechain.main_activation_height = 0;
         // The Chains signet has the rules of its main network.
         consensus.sidechain.pending_min_score = 6480;

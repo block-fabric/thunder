@@ -13,6 +13,13 @@
 inline constexpr unsigned int MAX_BLOCK_SERIALIZED_SIZE{4'000'000};
 /** The maximum allowed weight for a block, see BIP 141 (network rule) */
 inline constexpr unsigned int MAX_BLOCK_WEIGHT{4'000'000};
+/**
+ * Thunder: most non-witness signature operations a transaction may execute, counted as BIP54 does,
+ * from Consensus::Params::legacy_sigops_limit_height (network rule from that height). Legacy
+ * signature hashing is quadratic in the size of a transaction; Thunder's blocks take eight 1 MB
+ * (stripped) transactions, so without it a block can take some eight times Bitcoin's worst case.
+ */
+inline constexpr unsigned int MAX_TX_LEGACY_SIGOPS_CONSENSUS{2'500};
 /** The maximum allowed number of signature check operations in a block (network rule) */
 inline constexpr int64_t MAX_BLOCK_SIGOPS_COST{80'000};
 /** Coinbase transaction outputs can only be spent after this number of new blocks (network rule) */

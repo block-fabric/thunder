@@ -171,6 +171,7 @@ BASE_SCRIPTS = [
     'feature_sidechain.py',
     'feature_sidechain_network.py',
     'feature_thunder_blocks.py',
+    'feature_thunder_policy.py',
     'feature_sidechain_headers.py',
     'feature_sidechain_catchup.py',
     'feature_sidechain_prune.py',
