@@ -413,6 +413,9 @@ CCoinsViewCache::ResetGuard CoinsViewOverlay::StartFetching(const CBlock& block 
 }
 
 static const uint64_t MIN_TRANSACTION_OUTPUT_WEIGHT{WITNESS_SCALE_FACTOR * ::GetSerializeSize(CTxOut())};
+// Thunder: the outputs of one transaction, really (this looks up one txid). Its blocks are larger than
+// Bitcoin's, but the stripped size of a transaction stays within MAX_BLOCK_WEIGHT / WITNESS_SCALE_FACTOR
+// bytes (CheckTransaction), and outputs are in the stripped part: Bitcoin's bound still holds.
 static const uint64_t MAX_OUTPUTS_PER_BLOCK{MAX_BLOCK_WEIGHT / MIN_TRANSACTION_OUTPUT_WEIGHT};
 
 const Coin& AccessByTxid(const CCoinsViewCache& view, const Txid& txid)

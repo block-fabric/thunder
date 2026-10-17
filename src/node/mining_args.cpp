@@ -56,10 +56,12 @@ Result<void> CheckMiningOptions(BlockCreateOptions options, bool use_argnames)
                                             use_argnames ? "-blockmaxweight" : "block_max_weight",
                                             *options.block_max_weight))};
     }
-    if (options.coinbase_output_max_additional_sigops > MAX_BLOCK_SIGOPS_COST) {
+    // The chain's own maximum, which may be above Bitcoin's.
+    const int64_t max_sigops{Params().GetConsensus().MaxBlockSigOpsCost()};
+    if (options.coinbase_output_max_additional_sigops > static_cast<uint64_t>(max_sigops)) {
         return Error{Untranslated(strprintf("%s (%zu) exceeds consensus maximum block sigops cost (%d)",
                                             "coinbase_output_max_additional_sigops",
-                                            options.coinbase_output_max_additional_sigops, MAX_BLOCK_SIGOPS_COST))};
+                                            options.coinbase_output_max_additional_sigops, max_sigops))};
     }
     return {};
 }
