@@ -11,7 +11,8 @@
   reorganisation of the mainchain and connected again, and read back by -reindex.
 - The miner stops below 640,000 signature operations.
 - submitblock refuses a block over each limit of Thunder with the limit's reason.
-- Blocks only Thunder can have: more than 65,536 transactions (not relayed as a compact block), and
+- Blocks only Thunder can have: more than 65,535 transactions (not relayed as a compact block, whose
+  receiver takes at most 65,535; one of exactly 65,535 is, and one of exactly 65,536 is not), and
   more than 16,777,215 bytes (submitted through RPC, past what an entry of the transaction index
   holds).
 - Restarts, -reindex and -reindex-chainstate read the large blocks back.
@@ -41,13 +42,15 @@ MAX_STANDARD_TX_WEIGHT = 400_000
 BIG_TXS = 18
 DATA_SIZE = 99_000
 # Spends of 380 witness items of 520 bytes each, two per transaction: some 397,000 bytes of witness
-# per transaction, under the 101,000 vbytes of a mempool cluster.
+# per transaction, under the 100,000 vbytes a transaction may have to be relayed.
 WITNESS_TXS = 13
 WITNESS_ITEMS = 380
 SIGOPS_TXS = 45
-# Blocks of more transactions are not relayed as compact blocks (MAX_COMPACT_BLOCK_TXS).
-MAX_COMPACT_BLOCK_TXS = 0x10000
-FAN_OUT_TXS = 26
+# Blocks of more transactions are not relayed as compact blocks (MAX_COMPACT_BLOCK_TXS): a compact block
+# numbers its transactions in 16 bits, and its receiver refuses one of more.
+MAX_COMPACT_BLOCK_TXS = 0xFFFF
+# Coins for a block of exactly 65,535 transactions, one of exactly 65,536 and one of more.
+FAN_OUT_TXS = 78
 FAN_OUT_SIZE = 2_550
 # The largest offset of a transaction in its block that an entry of the transaction index holds.
 MAX_TXINDEX_OFFSET = 0xFFFFFF
@@ -292,8 +295,8 @@ class ThunderBlocksTest(SidechainTest):
         self.bmm()
         self.check_in_sync()
 
-        self.log.info("A block of more than 65,536 transactions: not relayed as a compact block")
-        # Anyone-can-spend coins for it, made by a block of this test's own.
+        self.log.info("Blocks of 65,535, exactly 65,536 and more than 65,536 transactions")
+        # Anyone-can-spend coins for them, made by a block of this test's own.
         utxo = self.wallet_coin(side, Decimal("1"))
         fan_in = self.spend(side, utxo, [CTxOut(1000, CScript([OP_TRUE])) for _ in range(FAN_OUT_TXS)])
         fan_outs = []
@@ -303,16 +306,34 @@ class ThunderBlocksTest(SidechainTest):
             fan_out.vout = [CTxOut(0, CScript([OP_TRUE])) for _ in range(FAN_OUT_SIZE)]
             fan_outs.append(fan_out)
         self.commit_and_submit(self.new_block(side, [fan_in] + fan_outs))
-        many = []
-        for fan_out in fan_outs:
-            fan_out_txid = fan_out.txid_int
-            for n in range(FAN_OUT_SIZE):
+        coins = [(fan_out.txid_int, n) for fan_out in fan_outs for n in range(FAN_OUT_SIZE)]
+
+        def spends(count):
+            txs = []
+            for _ in range(count):
                 tx = CTransaction()
-                tx.vin.append(CTxIn(COutPoint(fan_out_txid, n)))
+                tx.vin.append(CTxIn(COutPoint(*coins.pop())))
                 tx.vout.append(CTxOut(0, CScript([OP_TRUE])))
-                many.append(tx)
+                txs.append(tx)
+            return txs
+
+        # The most a compact block takes, with the coinbase: relayed as one, which the other node rebuilds.
+        largest_compact = self.new_block(side, spends(MAX_COMPACT_BLOCK_TXS - 1))
+        assert_equal(len(largest_compact.vtx), MAX_COMPACT_BLOCK_TXS)
+        with other.assert_debug_log(expected_msgs=[f"Successfully reconstructed block {largest_compact.hash_hex}"], unexpected_msgs=["indexes overflowed 16 bits"], timeout=120):
+            self.commit_and_submit(largest_compact)
+            self.sync_blocks()
+        # One more: it goes as a whole block. (A compact block of it was refused by its receiver, which
+        # then never saw the block until the next one.)
+        one_more = self.new_block(side, spends(MAX_COMPACT_BLOCK_TXS))
+        assert_equal(len(one_more.vtx), MAX_COMPACT_BLOCK_TXS + 1)
+        with other.assert_debug_log(expected_msgs=[], unexpected_msgs=["indexes overflowed 16 bits", f"Successfully reconstructed block {one_more.hash_hex}"], timeout=120):
+            self.commit_and_submit(one_more)
+            self.sync_blocks()
+        assert_equal(other.getblock(one_more.hash_hex, 1)["nTx"], MAX_COMPACT_BLOCK_TXS + 1)
+        many = spends(len(coins))
         many_block = self.new_block(side, many)
-        assert_greater_than(len(many_block.vtx), MAX_COMPACT_BLOCK_TXS)
+        assert_greater_than(len(many_block.vtx), MAX_COMPACT_BLOCK_TXS + 1)
         self.commit_and_submit(many_block)
         assert_equal(side.getblock(many_block.hash_hex)["nTx"], len(many_block.vtx))
         self.sync_blocks()
