@@ -8,7 +8,7 @@
   "blockWeight": 32000000,
   "brand": {
     "color": "#a585ff",
-    "iconHue": 232,
+    "iconHue": 0,
     "mark": ["M18.5 3.5L8 18h7.5l-2 10.5L24.5 14H17z", "M3.5 11.5h4", "M2.5 16.5h3", "M4.5 21.5h3"]
   },
   "networks": {
